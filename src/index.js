@@ -1,30 +1,39 @@
-import express from "express";
-import { PORT } from "./config.js";
-import authRoutes from "./routes/auth.routes.js";
-import { sequelize } from "./db.js";
-import "./models/User.js";
-import cors from "cors";
+import express from "express"
+import { PORT } from "./config.js"
+import authRoutes from "./routes/auth.routes.js"
+import flightRoutes from "./routes/flight.routes.js"
+import usersRoutes from "./routes/users.routes.js" // Nueva importación
+import { sequelize } from "./db.js"
+import "./models/User.js"
+import "./models/Flight.js"
+import cors from "cors"
 
-const app = express();
+const app = express()
 
-// Agrega esto ANTES de las rutas
-app.use(express.json());
+// Middleware para parsear JSON
+app.use(express.json())
 
+// Configuración de CORS
 app.use(
   cors({
-    origin: "http://localhost:5173",
-  })
-);
+    origin: "http://localhost:5173", // Asegúrate de que este sea el puerto correcto de tu frontend
+    credentials: true,
+  }),
+)
 
 try {
-  // Forzar recreación de tablas (solo en desarrollo)
-  await sequelize.sync();
-  console.log("Tablas sincronizadas");
+  // Sincronizar modelos con la base de datos
+  await sequelize.sync({ force: false }) // Cambiado a false para no recrear las tablas en cada inicio
+  console.log("Tablas sincronizadas")
 
-  app.listen(PORT);
-  app.use("/auth", authRoutes);
+  // Configurar rutas
+  app.use("/auth", authRoutes)
+  app.use("/api", flightRoutes)
+  app.use("/api", usersRoutes) // Nueva ruta para usuarios
 
-  console.log(`Server listening on port ${PORT}`);
+  // Iniciar servidor
+  app.listen(PORT)
+  console.log(`Server listening on port ${PORT}`)
 } catch (error) {
-  console.log("Error de inicialización:", error);
+  console.log("Error de inicialización:", error)
 }
