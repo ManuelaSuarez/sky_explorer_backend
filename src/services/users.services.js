@@ -5,7 +5,7 @@ import { User } from "../models/User.js";
 export const getUsers = async (req, res) => {
   try {
     const users = await User.findAll({
-      attributes: ['id', 'name', 'email', 'role', 'isActive', 'createdAt'],
+      attributes: ["id", "name", "email", "role", "isActive", "createdAt"],
       order: [["id", "DESC"]],
     });
 
@@ -25,7 +25,7 @@ export const getUserById = async (req, res) => {
 
   try {
     const user = await User.findByPk(id, {
-      attributes: ['id', 'name', 'email', 'role', 'isActive', 'createdAt']
+      attributes: ["id", "name", "email", "role", "isActive", "createdAt"],
     });
 
     if (!user) {
@@ -45,23 +45,25 @@ export const getUserById = async (req, res) => {
 // Crear un nuevo usuario (para admin)
 export const createUser = async (req, res) => {
   try {
-    const { 
-      username, 
-      name, 
-      birthday, 
-      nationality, 
-      dni, 
-      phone, 
-      email, 
-      confirmEmail, 
-      password, 
+    const {
+      username,
+      name,
+      birthday,
+      nationality,
+      dni,
+      phone,
+      email,
+      confirmEmail,
+      password,
       confirmPassword,
-      role = 'user'
+      role = "user",
     } = req.body;
 
     // Validar campos requeridos
     if (!name || !email || !password) {
-      return res.status(400).json({ message: "Nombre, email y contraseña son obligatorios" });
+      return res
+        .status(400)
+        .json({ message: "Nombre, email y contraseña son obligatorios" });
     }
 
     // Validar que las contraseñas coincidan
@@ -71,19 +73,25 @@ export const createUser = async (req, res) => {
 
     // Validar que los emails coincidan
     if (email !== confirmEmail) {
-      return res.status(400).json({ message: "Los correos electrónicos no coinciden" });
+      return res
+        .status(400)
+        .json({ message: "Los correos electrónicos no coinciden" });
     }
 
     // Verificar si el usuario ya existe por email
     const userExists = await User.findOne({ where: { email } });
     if (userExists) {
-      return res.status(400).json({ message: "Este email ya se encuentra registrado" });
+      return res
+        .status(400)
+        .json({ message: "Este email ya se encuentra registrado" });
     }
 
     // Verificar si el nombre ya está en uso
     const nameExists = await User.findOne({ where: { name } });
     if (nameExists) {
-      return res.status(400).json({ message: "Este nombre de usuario ya está en uso" });
+      return res
+        .status(400)
+        .json({ message: "Este nombre de usuario ya está en uso" });
     }
 
     // Encriptar la contraseña
@@ -101,7 +109,7 @@ export const createUser = async (req, res) => {
       nationality,
       dni,
       phone,
-      isActive: true
+      isActive: true,
     });
 
     // Devolver el usuario sin la contraseña
@@ -111,13 +119,15 @@ export const createUser = async (req, res) => {
       email: newUser.email,
       role: newUser.role,
       isActive: newUser.isActive,
-      createdAt: newUser.createdAt
+      createdAt: newUser.createdAt,
     };
 
     res.status(201).json(userResponse);
   } catch (error) {
     console.error("Error al crear usuario:", error);
-    res.status(500).json({ message: "Error al crear el usuario", error: error.message });
+    res
+      .status(500)
+      .json({ message: "Error al crear el usuario", error: error.message });
   }
 };
 
@@ -135,27 +145,31 @@ export const updateUser = async (req, res) => {
 
     // Si se está cambiando el email, verificar que no exista otro usuario con ese email
     if (email && email !== user.email) {
-      const emailExists = await User.findOne({ 
-        where: { 
+      const emailExists = await User.findOne({
+        where: {
           email,
-          id: { [Op.ne]: id } // Excluir el usuario actual
-        } 
+          id: { [Op.ne]: id }, // Excluir el usuario actual
+        },
       });
       if (emailExists) {
-        return res.status(400).json({ message: "Este email ya está en uso por otro usuario" });
+        return res
+          .status(400)
+          .json({ message: "Este email ya está en uso por otro usuario" });
       }
     }
 
     // Si se está cambiando el nombre, verificar que no exista otro usuario con ese nombre
     if (name && name !== user.name) {
-      const nameExists = await User.findOne({ 
-        where: { 
+      const nameExists = await User.findOne({
+        where: {
           name,
-          id: { [Op.ne]: id } // Excluir el usuario actual
-        } 
+          id: { [Op.ne]: id }, // Excluir el usuario actual
+        },
       });
       if (nameExists) {
-        return res.status(400).json({ message: "Este nombre ya está en uso por otro usuario" });
+        return res
+          .status(400)
+          .json({ message: "Este nombre ya está en uso por otro usuario" });
       }
     }
 
@@ -164,7 +178,7 @@ export const updateUser = async (req, res) => {
       name: name || user.name,
       email: email || user.email,
       role: role || user.role,
-      isActive: isActive !== undefined ? isActive : user.isActive
+      isActive: isActive !== undefined ? isActive : user.isActive,
     });
 
     // Devolver el usuario actualizado sin la contraseña
@@ -174,13 +188,18 @@ export const updateUser = async (req, res) => {
       email: user.email,
       role: user.role,
       isActive: user.isActive,
-      updatedAt: user.updatedAt
+      updatedAt: user.updatedAt,
     };
 
     res.json(userResponse);
   } catch (error) {
     console.error("Error al actualizar usuario:", error);
-    res.status(500).json({ message: "Error al actualizar el usuario", error: error.message });
+    res
+      .status(500)
+      .json({
+        message: "Error al actualizar el usuario",
+        error: error.message,
+      });
   }
 };
 
@@ -197,7 +216,9 @@ export const deleteUser = async (req, res) => {
 
     // Prevenir que el admin se elimine a sí mismo
     if (req.user.id === parseInt(id)) {
-      return res.status(400).json({ message: "No puedes eliminar tu propia cuenta" });
+      return res
+        .status(400)
+        .json({ message: "No puedes eliminar tu propia cuenta" });
     }
 
     // Eliminar el usuario
@@ -206,7 +227,9 @@ export const deleteUser = async (req, res) => {
     res.json({ message: "Usuario eliminado correctamente" });
   } catch (error) {
     console.error("Error al eliminar usuario:", error);
-    res.status(500).json({ message: "Error al eliminar el usuario", error: error.message });
+    res
+      .status(500)
+      .json({ message: "Error al eliminar el usuario", error: error.message });
   }
 };
 
@@ -223,7 +246,9 @@ export const toggleUserStatus = async (req, res) => {
 
     // Prevenir que el admin se desactive a sí mismo
     if (req.user.id === parseInt(id)) {
-      return res.status(400).json({ message: "No puedes desactivar tu propia cuenta" });
+      return res
+        .status(400)
+        .json({ message: "No puedes desactivar tu propia cuenta" });
     }
 
     // Cambiar el estado del usuario
@@ -236,16 +261,23 @@ export const toggleUserStatus = async (req, res) => {
       email: user.email,
       role: user.role,
       isActive: user.isActive,
-      updatedAt: user.updatedAt
+      updatedAt: user.updatedAt,
     };
 
-    res.json({ 
-      message: `Usuario ${newStatus ? 'activado' : 'desactivado'} correctamente`, 
-      user: userResponse 
+    res.json({
+      message: `Usuario ${
+        newStatus ? "activado" : "desactivado"
+      } correctamente`,
+      user: userResponse,
     });
   } catch (error) {
     console.error("Error al cambiar estado del usuario:", error);
-    res.status(500).json({ message: "Error al cambiar el estado del usuario", error: error.message });
+    res
+      .status(500)
+      .json({
+        message: "Error al cambiar el estado del usuario",
+        error: error.message,
+      });
   }
 };
 
@@ -256,7 +288,7 @@ export const changeUserRole = async (req, res) => {
     const { role } = req.body;
 
     // Validar que el rol sea válido
-    const validRoles = ['admin', 'user'];
+    const validRoles = ["admin", "user"];
     if (!validRoles.includes(role)) {
       return res.status(400).json({ message: "Rol inválido" });
     }
@@ -269,7 +301,9 @@ export const changeUserRole = async (req, res) => {
 
     // Prevenir que el admin cambie su propio rol
     if (req.user.id === parseInt(id)) {
-      return res.status(400).json({ message: "No puedes cambiar tu propio rol" });
+      return res
+        .status(400)
+        .json({ message: "No puedes cambiar tu propio rol" });
     }
 
     // Cambiar el rol del usuario
@@ -281,15 +315,20 @@ export const changeUserRole = async (req, res) => {
       email: user.email,
       role: user.role,
       isActive: user.isActive,
-      updatedAt: user.updatedAt
+      updatedAt: user.updatedAt,
     };
 
-    res.json({ 
-      message: `Rol del usuario cambiado a ${role} correctamente`, 
-      user: userResponse 
+    res.json({
+      message: `Rol del usuario cambiado a ${role} correctamente`,
+      user: userResponse,
     });
   } catch (error) {
     console.error("Error al cambiar rol del usuario:", error);
-    res.status(500).json({ message: "Error al cambiar el rol del usuario", error: error.message });
+    res
+      .status(500)
+      .json({
+        message: "Error al cambiar el rol del usuario",
+        error: error.message,
+      });
   }
 };

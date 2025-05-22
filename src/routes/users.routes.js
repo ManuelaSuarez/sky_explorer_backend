@@ -6,19 +6,24 @@ import {
   updateUser,
   deleteUser,
   toggleUserStatus,
-  changeUserRole
+  changeUserRole,
 } from "../services/users.services.js";
-import { verifyToken, checkAdmin } from "../middleware/auth.middleware.js";
+import { verifyToken, isAdmin } from "../middleware/auth.middleware.js";
 
 const router = Router();
 
 // Rutas protegidas solo para administradores
-router.get("/users", verifyToken, checkAdmin, getUsers);
-router.get("/users/:id", verifyToken, checkAdmin, getUserById);
-router.post("/users", verifyToken, checkAdmin, createUser);
-router.put("/users/:id", verifyToken, checkAdmin, updateUser);
-router.delete("/users/:id", verifyToken, checkAdmin, deleteUser);
-router.patch("/users/:id/toggle-status", verifyToken, checkAdmin, toggleUserStatus);
-router.patch("/users/:id/change-role", verifyToken, checkAdmin, changeUserRole);
+router.get("/users", verifyToken, isAdmin, getUsers);
+router.get("/users/:id", verifyToken, isAdmin, getUserById);
+router.post("/users", verifyToken, isAdmin, createUser);
+router.put("/users/:id", verifyToken, isAdmin, updateUser);
+router.delete("/users/:id", verifyToken, isAdmin, deleteUser);
+router.patch(
+  "/users/:id/toggle-status",
+  verifyToken,
+  isAdmin,
+  toggleUserStatus
+);
+router.patch("/users/:id/change-role", verifyToken, isAdmin, changeUserRole);
 
 export default router;
