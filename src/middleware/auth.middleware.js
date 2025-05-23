@@ -1,3 +1,4 @@
+// middleware/auth.middleware.js
 import jwt from "jsonwebtoken"
 import { User } from "../models/User.js"
 
@@ -15,7 +16,7 @@ export const verifyToken = async (req, res, next) => {
     // Verificar el token
     const decoded = jwt.verify(token, "programacion3-2025") // Usar tu clave secreta real
 
-    // Buscar el usuario en la base de datos
+    // Buscar el usuario en la base de datos para obtener el rol actualizado
     const user = await User.findOne({ where: { email: decoded.email } })
 
     if (!user) {
@@ -26,7 +27,7 @@ export const verifyToken = async (req, res, next) => {
     req.user = {
       id: user.id,
       email: user.email,
-      role: user.role, // 'admin' o 'usuario'
+      role: user.role, // Ahora este rol puede ser 'admin', 'user' o 'airline'
     }
 
     next()
@@ -44,11 +45,20 @@ export const checkAdmin = (req, res, next) => {
   }
 }
 
-// Middleware para verificar si el usuario es un usuario regular
+// Middleware para verificar si el usuario es un usuario regular (solo 'user')
 export const isUser = (req, res, next) => {
-  if (req.user && (req.user.role === "usuario" || req.user.role === "admin")) {
+  if (req.user && req.user.role === "user") { 
     next()
   } else {
-    return res.status(403).json({ message: "Acceso denegado - Se requiere rol de usuario" })
+    return res.status(403).json({ message: "Acceso denegado - Se requiere rol de usuario regular" })
+  }
+}
+
+// NUEVO Middleware para verificar si el usuario es 'admin' o 'airline'
+export const checkAdminOrAirline = (req, res, next) => {
+  if (req.user && (req.user.role === "admin" || req.user.role === "airline")) {
+    next()
+  } else {
+    return res.status(403).json({ message: "Acceso denegado - Se requiere rol de administrador o aerolínea" })
   }
 }

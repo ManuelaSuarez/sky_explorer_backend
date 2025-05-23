@@ -1,11 +1,14 @@
+// index.js
 import express from "express"
 import { PORT } from "./config.js"
 import authRoutes from "./routes/auth.routes.js"
 import flightRoutes from "./routes/flight.routes.js"
-import usersRoutes from "./routes/users.routes.js" // Nueva importación
+import usersRoutes from "./routes/users.routes.js"
+import airlineRoutes from "./routes/airline.routes.js" // Nueva importación de rutas de aerolíneas
 import { sequelize } from "./db.js"
 import "./models/User.js"
 import "./models/Flight.js"
+import "./models/Airline.js" // Nueva importación del modelo Airline
 import cors from "cors"
 
 const app = express()
@@ -29,7 +32,8 @@ try {
   // Configurar rutas
   app.use("/auth", authRoutes)
   app.use("/api", flightRoutes)
-  app.use("/api", usersRoutes) // Nueva ruta para usuarios
+  app.use("/api", usersRoutes)
+  app.use("/api", airlineRoutes) // Nueva ruta para aerolíneas
 
   // Iniciar servidor
   app.listen(PORT)
