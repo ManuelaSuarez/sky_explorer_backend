@@ -11,8 +11,6 @@ export const getFlights = async (req, res) => {
     let orderClause = [["basePrice", "ASC"]];
 
     if (origin) {
-      // ELIMINA LA PARTE .split(" (")[0];
-      // Usa la cadena completa del aeropuerto tal como viene del frontend
       whereClause.origin = { [Op.like]: `${origin}%` };
       // Si necesitas insensibilidad a mayúsculas/minúsculas y la base de datos es sensible:
       // whereClause.origin = sequelize.where(sequelize.fn('lower', sequelize.col('origin')), {
@@ -21,8 +19,6 @@ export const getFlights = async (req, res) => {
     }
 
     if (destination) {
-      // ELIMINA LA PARTE .split(" (")[0];
-      // Usa la cadena completa del aeropuerto tal como viene del frontend
       whereClause.destination = { [Op.like]: `${destination}%` };
       // Si necesitas insensibilidad a mayúsculas/minúsculas y la base de datos es sensible:
       // whereClause.destination = sequelize.where(sequelize.fn('lower', sequelize.col('destination')), {
@@ -52,14 +48,12 @@ export const getFlights = async (req, res) => {
       }
     }
 
-    // --- BLOQUE DE DEPURACIÓN (Ayuda a ver qué consulta se está formando) ---
     console.log(
       "Backend recibió solicitud para vuelos con filtros:",
       req.query
     );
     console.log("Cláusula WHERE generada:", whereClause);
     console.log("Cláusula ORDER BY generada:", orderClause);
-    // --- FIN BLOQUE DE DEPURACIÓN ---
 
     const flights = await Flight.findAll({
       where: whereClause,
@@ -94,7 +88,6 @@ export const getFlights = async (req, res) => {
   }
 };
 
-// ... (rest of your service functions) ...
 export const getFlightById = async (req, res) => {
   const { id } = req.params;
   try {

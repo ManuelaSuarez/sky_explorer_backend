@@ -6,7 +6,7 @@ import {
   updateUser,
   deleteUser,
   toggleUserStatus,
-  changeUserRole
+  changeUserRole,
 } from "../services/users.services.js";
 import { verifyToken, checkAdmin } from "../middleware/auth.middleware.js";
 
@@ -18,7 +18,21 @@ router.get("/users/:id", verifyToken, checkAdmin, getUserById);
 router.post("/users", verifyToken, checkAdmin, createUser);
 router.put("/users/:id", verifyToken, checkAdmin, updateUser);
 router.delete("/users/:id", verifyToken, checkAdmin, deleteUser);
-router.patch("/users/:id/toggle-status", verifyToken, checkAdmin, toggleUserStatus);
+router.patch(
+  "/users/:id/toggle-status",
+  verifyToken,
+  checkAdmin,
+  toggleUserStatus
+);
 router.patch("/users/:id/change-role", verifyToken, checkAdmin, changeUserRole);
+
+// Ruta para que el propio usuario vea sus datos
+router.get("/users/profile/:id", verifyToken, getUserById);
+
+// Ruta para que el propio usuario edite sus datos (excepto email y rol)
+router.put("/users/profile/:id", verifyToken, updateUser);
+
+// Ruta para que el propio usuario elimine su cuenta
+router.delete("/users/profile/:id", verifyToken, deleteUser);
 
 export default router;
