@@ -1,216 +1,179 @@
 import bcrypt from "bcrypt"; 
-import jwt from "jsonwebtoken"; 
 import { User } from "../models/User.js"; 
 import { Booking } from "../models/Booking.js"; 
 import { Op } from "sequelize"; 
 
-// Obtener todos los usuarios
+// ===== FUNCIONES PARA ADMIN (Gestión de Aerolíneas) =====
+
+// Listar todos los usuarios
 export const getUsers = async (req, res) => {
   try {
     const users = await User.findAll({
-      attributes: ['id', 'name', 'email', 'role', 'isActive', 'createdAt'],
-      order: [["id", "DESC"]], 
+      attributes: ['id', 'name', 'email', 'role', 'createdAt'],
+      order: [["id", "DESC"]]
     });
-    return res.json(users);
+    res.json(users);
   } catch (error) {
-    console.error("Error al obtener los usuarios:", error);
-    return res.status(500).json({ message: "Error al obtener los usuarios", error: error.message });
+    console.error("Error al obtener usuarios:", error);
+    res.status(500).json({ message: "Error al obtener usuarios" });
   }
 };
 
-// Obtener un usuario por ID
+// Obtener un usuario específico
 export const getUserById = async (req, res) => {
-  const { id } = req.params;
   try {
-    const user = await User.findByPk(id, {
-      attributes: ['id', 'name', 'email', 'role', 'isActive', 'createdAt']
+    const user = await User.findByPk(req.params.id, {
+      attributes: ['id', 'name', 'email', 'role', 'createdAt']
     });
+    
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
-    return res.json(user);
+    
+    res.json(user);
   } catch (error) {
-    console.error("Error al obtener el usuario:", error);
-    return res.status(500).json({ message: "Error al obtener el usuario", error: error.message });
+    console.error("Error al obtener usuario:", error);
+    res.status(500).json({ message: "Error al obtener usuario" });
   }
 };
 
-// Crear un nuevo usuario (usado para registro o por admin)
+// Crear usuario de aerolínea
 export const createUser = async (req, res) => {
   try {
-    const { username, name, email, confirmEmail, password, confirmPassword, role = 'user' } = req.body;
+    const { name, email, password, confirmPassword } = req.body;
 
-
+    // Validaciones básicas
     if (!name || !email || !password) {
       return res.status(400).json({ message: "Nombre, email y contraseña son requeridos" });
     }
+    
     if (password !== confirmPassword) {
       return res.status(400).json({ message: "Las contraseñas no coinciden" });
     }
-    if (email !== confirmEmail) {
-      return res.status(400).json({ message: "Los emails no coinciden" });
-    }
 
-    // Verificar si el email ya está registrado
+    // Verificar si el email ya existe
     const userExists = await User.findOne({ where: { email } });
     if (userExists) {
-      return res.status(400).json({ message: "Este email ya se encuentra registrado" });
+      return res.status(400).json({ message: "Este email ya está registrado" });
     }
 
-    // Encriptar la contraseña
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-    // Crear el nuevo usuario
+    // Crear usuario
+    const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = await User.create({
-      name: username || name, 
+      name,
       email,
       password: hashedPassword,
-      role: role,
-      isActive: true 
+      role: 'airline'
     });
 
-    // Retornar el usuario sin la contraseña
-    const userResponse = {
+    // Responder sin la contraseña
+    res.status(201).json({
       id: newUser.id,
       name: newUser.name,
       email: newUser.email,
-      role: newUser.role,
-      isActive: newUser.isActive,
-      createdAt: newUser.createdAt
-    };
-    res.status(201).json(userResponse);
+      role: newUser.role
+    });
   } catch (error) {
     console.error("Error al crear usuario:", error);
-    res.status(500).json({ message: "Error al crear el usuario", error: error.message });
+    res.status(500).json({ message: "Error al crear usuario" });
   }
 };
 
-
+// Actualizar usuario de aerolínea
 export const updateUser = async (req, res) => {
   try {
-    const { id } = req.params; // ID del usuario a actualizar
-    const { name, email, password, role, isActive } = req.body; 
+    const { name, email, password } = req.body;
+    const user = await User.findByPk(req.params.id);
 
-    const user = await User.findByPk(id);
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
-    // Si el email se está cambiando, verificar que no haya otro usuario con ese email
+    // Verificar email único (si se está cambiando)
     if (email && email !== user.email) {
       const emailExists = await User.findOne({
-        where: {
-          email,
-          id: { [Op.ne]: id } 
-        }
+        where: { email, id: { [Op.ne]: req.params.id } }
       });
       if (emailExists) {
-        return res.status(400).json({ message: "Este email ya está en uso por otro usuario" });
+        return res.status(400).json({ message: "Este email ya está en uso" });
       }
     }
 
-    // Si se proporciona una nueva contraseña, encriptarla y actualizarla
-    if (password) {
-      const salt = await bcrypt.genSalt(10);
-      user.password = await bcrypt.hash(password, salt);
-    }
-
-  
+    // Actualizar campos
     if (name) user.name = name;
     if (email) user.email = email;
-    if (role) user.role = role; 
-    if (typeof isActive === 'boolean') user.isActive = isActive; 
+    if (password) {
+      user.password = await bcrypt.hash(password, 10);
+    }
 
-    await user.save(); 
+    await user.save();
 
-    // Retornar el usuario actualizado (sin la contraseña)
-    const userResponse = {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      isActive: user.isActive,
-      updatedAt: user.updatedAt
-    };
-
-    res.json({ message: "Usuario actualizado correctamente", user: userResponse });
+    res.json({
+      message: "Usuario actualizado",
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
   } catch (error) {
     console.error("Error al actualizar usuario:", error);
-    res.status(500).json({ message: "Error al actualizar el usuario", error: error.message });
+    res.status(500).json({ message: "Error al actualizar usuario" });
   }
 };
 
-// Eliminar un usuario (para admin, con validación de reservas)
+// Eliminar usuario de aerolínea
 export const deleteUser = async (req, res) => {
   try {
-    const { id } = req.params;
-    const user = await User.findByPk(id);
-    if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
-    if (req.user.id === parseInt(id)) return res.status(400).json({ message: "No puedes eliminar tu propia cuenta" });
-    const userBookings = await Booking.findAll({ where: { userId: id } });
-    if (userBookings.length > 0) return res.status(400).json({ message: "No se puede eliminar el usuario porque tiene reservas asociadas." });
-    await user.destroy();
-    res.json({ message: "Usuario eliminado correctamente" });
-  } catch (error) {
-    console.error("Error al eliminar usuario:", error);
-    res.status(500).json({ message: "Error al eliminar el usuario", error: error.message });
-  }
-};
-
-// Cambiar el estado de un usuario (Activo/Inactivo)
-export const toggleUserStatus = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const user = await User.findByPk(id);
-    if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
-    if (req.user.id === parseInt(id)) return res.status(400).json({ message: "No puedes desactivar tu propia cuenta" });
-    const newStatus = !user.isActive;
-    await user.update({ isActive: newStatus });
-    res.json({ message: `Usuario ${newStatus ? 'activado' : 'desactivado'} correctamente`, user: { id: user.id, name: user.name, isActive: user.isActive } });
-  } catch (error) {
-    console.error("Error al cambiar estado de usuario:", error);
-    res.status(500).json({ message: "Error al cambiar el estado del usuario", error: error.message });
-  }
-};
-
-// Cambiar rol de usuario
-export const changeUserRole = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { role } = req.body;
-    const validRoles = ['admin', 'user', 'airline']; 
-    if (!validRoles.includes(role)) return res.status(400).json({ message: "Rol inválido" });
-    const user = await User.findByPk(id);
-    if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
-    if (req.user.id === parseInt(id)) return res.status(400).json({ message: "No puedes cambiar tu propio rol" });
-    await user.update({ role });
-    res.json({ message: `Rol del usuario cambiado a ${role} correctamente`, user: { id: user.id, name: user.name, role: user.role } });
-  } catch (error) {
-    console.error("Error al cambiar rol de usuario:", error);
-    res.status(500).json({ message: "Error al cambiar el rol del usuario", error: error.message });
-  }
-};
-
-
-
-// Obtener el perfil del usuario logueado (solo su propio perfil)
-export const getMyProfile = async (req, res) => {
-  try {
-    const user = await User.findByPk(req.user.id, {
-      attributes: ['id', 'name', 'email', 'role', 'isActive', 'createdAt']
-    });
+    const user = await User.findByPk(req.params.id);
+    
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
-    return res.json(user);
+    
+    // No puede eliminarse a sí mismo
+    if (req.user.id === parseInt(req.params.id)) {
+      return res.status(400).json({ message: "No puedes eliminar tu propia cuenta" });
+    }
+    
+    // Verificar si tiene reservas
+    const bookingsCount = await Booking.count({ where: { userId: req.params.id } });
+    if (bookingsCount > 0) {
+      return res.status(400).json({ 
+        message: "No se puede eliminar: el usuario tiene reservas asociadas" 
+      });
+    }
+    
+    await user.destroy();
+    res.json({ message: "Usuario eliminado" });
   } catch (error) {
-    console.error("Error al obtener perfil:", error);
-    return res.status(500).json({ message: "Error al obtener el perfil", error: error.message });
+    console.error("Error al eliminar usuario:", error);
+    res.status(500).json({ message: "Error al eliminar usuario" });
   }
 };
 
-// Actualizar el perfil del usuario logueado (para el modal del frontend)
+// ===== FUNCIONES PARA USUARIO REGULAR =====
+
+// Ver mi perfil
+export const getMyProfile = async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id, {
+      attributes: ['id', 'name', 'email', 'role', 'createdAt']
+    });
+    
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+    
+    res.json(user);
+  } catch (error) {
+    console.error("Error al obtener perfil:", error);
+    res.status(500).json({ message: "Error al obtener perfil" });
+  }
+};
+
+// Editar mi perfil
 export const updateUserProfile = async (req, res) => {
   try {
     const { name, email, currentPassword, newPassword } = req.body;
@@ -220,86 +183,59 @@ export const updateUserProfile = async (req, res) => {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
-    if (newPassword) { // Solo si se proporciona una nueva contraseña
+    // Si quiere cambiar contraseña, validar la actual
+    if (newPassword) {
       if (!currentPassword) {
-        return res.status(400).json({ message: "Debe proporcionar la contraseña actual" });
+        return res.status(400).json({ message: "Ingresa tu contraseña actual" });
       }
-      const isMatch = await bcrypt.compare(currentPassword, user.password);
-      if (!isMatch) {
-        return res.status(400).json({ message: "La contraseña actual es incorrecta" });
+      
+      const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+      if (!isValidPassword) {
+        return res.status(400).json({ message: "Contraseña actual incorrecta" });
       }
-      const salt = await bcrypt.genSalt(10);
-      user.password = await bcrypt.hash(newPassword, salt);
+      
+      user.password = await bcrypt.hash(newPassword, 10);
     }
 
+    // Actualizar otros campos
     if (name) user.name = name;
     if (email) user.email = email;
 
     await user.save();
 
-    let token;
-    // Si el email fue cambiado, generamos un nuevo token
-    if (email && email !== user.email) {
-      token = jwt.sign(
-        { id: user.id, email: user.email, name: user.name, role: user.role },
-        'programacion3-2025', 
-        { expiresIn: '1h' }
-      );
-    }
-
-    const response = {
-      message: "Perfil actualizado correctamente",
+    res.json({
+      message: "Perfil actualizado",
       user: {
         id: user.id,
         name: user.name,
         email: user.email,
         role: user.role
       }
-    };
-    if (token) response.token = token;
-
-    res.json(response);
+    });
   } catch (error) {
     console.error("Error al actualizar perfil:", error);
-    res.status(500).json({ message: "Error al actualizar el perfil", error: error.message });
+    res.status(500).json({ message: "Error al actualizar perfil" });
   }
 };
 
-// Eliminar el perfil del usuario logueado (VALIDA si tiene reservas)
-export const deleteUserProfile = async (req, res) => {
-  try {
-    const user = await User.findByPk(req.user.id);
-    if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
-    const userBookings = await Booking.findAll({ where: { userId: req.user.id } });
-    if (userBookings.length > 0) {
-      return res.status(400).json({
-        message: "No puedes eliminar tu cuenta porque tienes reservas activas. Primero debes cancelarlas.",
-        bookingsCount: userBookings.length
-      });
-    }
-    await user.destroy();
-    res.json({ message: "Cuenta eliminada correctamente" });
-  } catch (error) {
-    console.error("Error al eliminar cuenta:", error);
-    res.status(500).json({ message: "Error al eliminar la cuenta", error: error.message });
-  }
-};
-
-// Eliminar el perfil del usuario logueado Y TODAS sus reservas (la que usa el modal)
+// Eliminar mi cuenta (con todas mis reservas)
 export const deleteUserProfileWithBookings = async (req, res) => {
   try {
     const user = await User.findByPk(req.user.id);
-    if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
+    
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
 
-    // Eliminar todas las reservas asociadas a este usuario PRIMERO
+    // Eliminar primero todas las reservas del usuario
     await Booking.destroy({ where: { userId: req.user.id } });
     
-  
+    // Luego eliminar el usuario
     await user.destroy();
 
-    res.json({ message: "Cuenta y todas las reservas eliminadas correctamente" });
+    res.json({ message: "Cuenta eliminada correctamente" });
   } catch (error) {
-    console.error("Error al eliminar cuenta y reservas:", error);
-    res.status(500).json({ message: "Error al eliminar la cuenta y sus reservas", error: error.message });
+    console.error("Error al eliminar cuenta:", error);
+    res.status(500).json({ message: "Error al eliminar cuenta" });
   }
 };

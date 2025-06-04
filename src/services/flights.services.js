@@ -1,5 +1,3 @@
-// flights.services.js
-
 import { Flight } from "../models/Flight.js";
 import { Op } from "sequelize";
 
@@ -8,29 +6,20 @@ export const getFlights = async (req, res) => {
     const { origin, destination, departureDate, airline, sort } = req.query;
 
     const whereClause = {};
-    let orderClause = [["basePrice", "ASC"]];
+    let orderClause = [["basePrice", "ASC"]]; // Orden por defecto: precio ascendente
+
+    whereClause.status = "Activo";
 
     if (origin) {
-      // ELIMINA LA PARTE .split(" (")[0];
-      // Usa la cadena completa del aeropuerto tal como viene del frontend
       whereClause.origin = { [Op.like]: `${origin}%` };
-      // Si necesitas insensibilidad a mayúsculas/minúsculas y la base de datos es sensible:
-      // whereClause.origin = sequelize.where(sequelize.fn('lower', sequelize.col('origin')), {
-      //   [Op.like]: `${origin.toLowerCase()}%`
-      // });
     }
 
     if (destination) {
-      // ELIMINA LA PARTE .split(" (")[0];
-      // Usa la cadena completa del aeropuerto tal como viene del frontend
       whereClause.destination = { [Op.like]: `${destination}%` };
-      // Si necesitas insensibilidad a mayúsculas/minúsculas y la base de datos es sensible:
-      // whereClause.destination = sequelize.where(sequelize.fn('lower', sequelize.col('destination')), {
-      //   [Op.like]: `${destination.toLowerCase()}%`
-      // });
     }
 
     if (departureDate) {
+      // Asegurarse de que la fecha coincida exactamente
       whereClause.date = departureDate;
     }
 
@@ -39,6 +28,7 @@ export const getFlights = async (req, res) => {
       whereClause.airline = { [Op.in]: airlinesToFilter };
     }
 
+    // Lógica de ordenamiento
     if (sort) {
       switch (sort) {
         case "priceAsc":
@@ -47,54 +37,46 @@ export const getFlights = async (req, res) => {
         case "priceDesc":
           orderClause = [["basePrice", "DESC"]];
           break;
+
         default:
-          orderClause = [["basePrice", "ASC"]];
+  
+          break;
       }
     }
-
-    // --- BLOQUE DE DEPURACIÓN (Ayuda a ver qué consulta se está formando) ---
-    console.log(
-      "Backend recibió solicitud para vuelos con filtros:",
-      req.query
-    );
-    console.log("Cláusula WHERE generada:", whereClause);
-    console.log("Cláusula ORDER BY generada:", orderClause);
-    // --- FIN BLOQUE DE DEPURACIÓN ---
 
     const flights = await Flight.findAll({
       where: whereClause,
       order: orderClause,
     });
 
-    console.log(`Backend encontró ${flights.length} vuelos.`);
-
-    // Actualizar el estado si el vuelo ya pasó
+    // Esta sección actualiza el estado de los vuelos que ya pasaron.
     const now = new Date();
-
     await Promise.all(
       flights.map(async (flight) => {
-        const flightDateTime = new Date(
-          `${flight.date}T${flight.departureTime}`
-        );
+        const flightDateTime = new Date(`${flight.date}T${flight.departureTime}`);
         if (flightDateTime < now && flight.status === "Activo") {
           flight.status = "Inactivo";
-          await flight.save(); // actualiza en la base de datos
+          await flight.save(); 
         }
       })
     );
 
-    return res.json(flights);
+    return res.json(flights); // Devuelve los vuelos que cumplen el criterio original (status: "Activo")
   } catch (error) {
     console.error("Error al obtener vuelos en el backend (getFlights):", error);
-    return res.status(500).json({
-      message: "Error al obtener los vuelos desde el servidor.",
-      error: error.message,
-      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
-    });
+    if (res) {
+      return res.status(500).json({
+        message: "Error al obtener los vuelos desde el servidor.",
+        error: error.message,
+        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
+      });
+    } else {
+      console.error("No se pudo enviar respuesta de error: 'res' no definido.");
+      throw error;
+    }
   }
 };
 
-// ... (rest of your service functions) ...
 export const getFlightById = async (req, res) => {
   const { id } = req.params;
   try {
@@ -105,10 +87,15 @@ export const getFlightById = async (req, res) => {
     return res.json(flight);
   } catch (error) {
     console.error("Error al obtener vuelo por ID:", error);
-    return res.status(500).json({
-      message: "Error al obtener el vuelo por ID",
-      error: error.message,
-    });
+    if (res) {
+      return res.status(500).json({
+        message: "Error al obtener el vuelo por ID",
+        error: error.message,
+      });
+    } else {
+      console.error("No se pudo enviar respuesta de error: 'res' no definido.");
+      throw error;
+    }
   }
 };
 
@@ -125,6 +112,7 @@ export const createFlight = async (req, res) => {
       basePrice,
     } = req.body;
 
+    // Validación de campos obligatorios
     if (
       !airline ||
       !origin ||
@@ -135,9 +123,7 @@ export const createFlight = async (req, res) => {
       !capacity ||
       !basePrice
     ) {
-      return res
-        .status(400)
-        .json({ message: "Todos los campos son obligatorios" });
+      return res.status(400).json({ message: "Todos los campos son obligatorios" });
     }
 
     const newFlight = await Flight.create({
@@ -149,17 +135,20 @@ export const createFlight = async (req, res) => {
       arrivalTime,
       capacity: Number(capacity),
       basePrice: Number(basePrice),
-      status: "Activo",
-      purchaseDate: new Date().toISOString().split("T")[0],
-      createdBy: req.user ? req.user.id : null,
+      status: "Activo", // Por defecto, un nuevo vuelo es activo
+      purchaseDate: new Date().toISOString().split("T")[0], // Fecha de compra al momento de crear
+      createdBy: req.user ? req.user.id : null, // Asumiendo que 'req.user' puede contener el ID del usuario
     });
 
     res.status(201).json(newFlight);
   } catch (error) {
     console.error("Error al crear vuelo:", error);
-    res
-      .status(500)
-      .json({ message: "Error al crear el vuelo", error: error.message });
+    if (res) {
+      res.status(500).json({ message: "Error al crear el vuelo", error: error.message });
+    } else {
+      console.error("No se pudo enviar respuesta de error: 'res' no definido.");
+      throw error;
+    }
   }
 };
 
@@ -177,6 +166,7 @@ export const updateFlight = async (req, res) => {
       basePrice,
     } = req.body;
 
+    // Validación de campos obligatorios para la actualización
     if (
       !airline ||
       !origin ||
@@ -187,9 +177,7 @@ export const updateFlight = async (req, res) => {
       !capacity ||
       !basePrice
     ) {
-      return res
-        .status(400)
-        .json({ message: "Todos los campos son obligatorios" });
+      return res.status(400).json({ message: "Todos los campos son obligatorios" });
     }
 
     const flight = await Flight.findByPk(id);
@@ -211,9 +199,12 @@ export const updateFlight = async (req, res) => {
     res.json(flight);
   } catch (error) {
     console.error("Error al actualizar vuelo:", error);
-    res
-      .status(500)
-      .json({ message: "Error al actualizar el vuelo", error: error.message });
+    if (res) {
+      res.status(500).json({ message: "Error al actualizar el vuelo", error: error.message });
+    } else {
+      console.error("No se pudo enviar respuesta de error: 'res' no definido.");
+      throw error;
+    }
   }
 };
 
@@ -228,9 +219,12 @@ export const deleteFlight = async (req, res) => {
     res.json({ message: "Vuelo eliminado correctamente" });
   } catch (error) {
     console.error("Error al eliminar vuelo:", error);
-    res
-      .status(500)
-      .json({ message: "Error al eliminar el vuelo", error: error.message });
+    if (res) {
+      res.status(500).json({ message: "Error al eliminar el vuelo", error: error.message });
+    } else {
+      console.error("No se pudo enviar respuesta de error: 'res' no definido.");
+      throw error;
+    }
   }
 };
 
@@ -246,9 +240,14 @@ export const toggleFlightStatus = async (req, res) => {
     res.json({ message: `Estado del vuelo cambiado a ${newStatus}`, flight });
   } catch (error) {
     console.error("Error al cambiar estado del vuelo:", error);
-    res.status(500).json({
-      message: "Error al cambiar el estado del vuelo",
-      error: error.message,
-    });
+    if (res) {
+      res.status(500).json({
+        message: "Error al cambiar el estado del vuelo",
+        error: error.message,
+      });
+    } else {
+      console.error("No se pudo enviar respuesta de error: 'res' no definido.");
+      throw error;
+    }
   }
 };

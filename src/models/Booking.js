@@ -44,7 +44,7 @@ export const Booking = sequelize.define("Booking", {
     defaultValue: DataTypes.NOW,
   },
   status: {
-    type: DataTypes.ENUM('Activo', 'Inactivo', 'Cancelado'),
+    type: DataTypes.ENUM('Activo', 'Inactivo'),
     defaultValue: 'Activo',
   },
 }, {

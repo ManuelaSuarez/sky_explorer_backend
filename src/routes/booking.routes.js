@@ -1,29 +1,22 @@
-// routes/booking.routes.js - Con middleware de autenticación
 import { Router } from "express";
 import {
   createBooking,
   getUserBookings,
-  getUserBookingsByParam,
-  getAllBookings,
-  getBookingById
-} from "../services/bookings.services.js";
-import { verifyToken, checkAdmin } from "../middleware/auth.middleware.js";
+  getBookingById 
+} from "../services/bookings.services.js"; 
+import { verifyToken } from "../middleware/auth.middleware.js"; 
 
 const router = Router();
 
-// Crear una nueva reserva (requiere autenticación)
+// Crear una nueva reserva (requiere autenticación del usuario)
 router.post("/bookings", verifyToken, createBooking);
 
-// Obtener las reservas del usuario autenticado
+// Obtener las reservas del usuario autenticado (solo el usuario)
 router.get("/bookings/my-bookings", verifyToken, getUserBookings);
 
-// Obtener reservas de un usuario específico (solo admin)
-router.get("/bookings/user/:userId", verifyToken, checkAdmin, getUserBookingsByParam);
-
-// Obtener todas las reservas (solo admin)
-router.get("/bookings", verifyToken, checkAdmin, getAllBookings);
-
-// Obtener una reserva específica por ID (usuario propietario o admin)
+// Obtener una reserva específica por ID (solo el usuario propietario)
 router.get("/bookings/:id", verifyToken, getBookingById);
+
+
 
 export default router;
