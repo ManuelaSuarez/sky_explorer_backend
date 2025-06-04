@@ -14,13 +14,13 @@ import { verifyToken, checkAdminOrAirline } from "../middleware/auth.middleware.
 const router = Router()
 
 // Rutas públicas
-router.get("/flights", getFlights)
-router.get("/flights/:id", getFlightById)
+router.get("/flights", getFlights) //Devuelve la lista de vuelos.
+router.get("/flights/:id", getFlightById) // Devuelve la información de un vuelo específico por su id.
 
 // Rutas protegidas para administración de vuelos (ahora para admin Y aerolíneas)
-router.post("/flights", verifyToken, checkAdminOrAirline, createFlight)
-router.put("/flights/:id", verifyToken, checkAdminOrAirline, updateFlight)
-router.delete("/flights/:id", verifyToken, checkAdminOrAirline, deleteFlight)
-router.patch("/flights/:id/toggle-status", verifyToken, checkAdminOrAirline, toggleFlightStatus)
+router.post("/flights", verifyToken, checkAdminOrAirline, createFlight) //Crear un nuevo vuelo.
+router.put("/flights/:id", verifyToken, checkAdminOrAirline, updateFlight) //Actualizar un vuelo existente.
+router.delete("/flights/:id", verifyToken, checkAdminOrAirline, deleteFlight) //Eliminar un vuelo.
+router.patch("/flights/:id/toggle-status", verifyToken, checkAdminOrAirline, toggleFlightStatus) // Cambiar el estado del vuelo (por ejemplo, activarlo/desactivarlo).
 
 export default router
