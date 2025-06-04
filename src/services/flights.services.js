@@ -8,7 +8,6 @@ export const getFlights = async (req, res) => {
     const whereClause = {};
     let orderClause = [["basePrice", "ASC"]]; // Orden por defecto: precio ascendente
 
-    whereClause.status = "Activo";
 
     if (origin) {
       whereClause.origin = { [Op.like]: `${origin}%` };
