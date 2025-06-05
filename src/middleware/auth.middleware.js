@@ -27,7 +27,8 @@ export const verifyToken = async (req, res, next) => {
     req.user = {
       id: user.id,
       email: user.email,
-      role: user.role, // Ahora este rol puede ser 'admin', 'user' o 'airline'
+      role: user.role,
+      name: user.name // Ahora este rol puede ser 'admin', 'user' o 'airline'
     }
 
     next()

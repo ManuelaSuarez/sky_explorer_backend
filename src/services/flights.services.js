@@ -100,7 +100,7 @@ export const getFlightById = async (req, res) => {
 
 export const createFlight = async (req, res) => {
   try {
-    const {
+    let {
       airline,
       origin,
       destination,
@@ -110,6 +110,14 @@ export const createFlight = async (req, res) => {
       capacity,
       basePrice,
     } = req.body;
+
+    if (req.user?.role === "airline") {
+      // Si viene un airline distinto al del usuario, lo bloqueamos
+      if (airline && airline !== req.user.name) {
+        return res.status(403).json({ message: "No puedes crear vuelos para otra aerolínea." });
+      }
+      airline = req.user.name; // Se fuerza el nombre de la aerolínea autenticada
+    }
 
     // Validación de campos obligatorios
     if (
@@ -135,8 +143,8 @@ export const createFlight = async (req, res) => {
       capacity: Number(capacity),
       basePrice: Number(basePrice),
       status: "Activo", // Por defecto, un nuevo vuelo es activo
-      purchaseDate: new Date().toISOString().split("T")[0], // Fecha de compra al momento de crear
-      createdBy: req.user ? req.user.id : null, // Asumiendo que 'req.user' puede contener el ID del usuario
+      purchaseDate: new Date().toISOString().split("T")[0],
+      createdBy: req.user ? req.user.id : null,
     });
 
     res.status(201).json(newFlight);
@@ -184,6 +192,11 @@ export const updateFlight = async (req, res) => {
       return res.status(404).json({ message: "Vuelo no encontrado" });
     }
 
+    // 🔒 Seguridad: solo el admin o la aerolínea propietaria puede editar
+    if (req.user?.role === "airline" && req.user.name !== flight.airline) {
+      return res.status(403).json({ message: "No tienes permiso para editar este vuelo." });
+    }
+
     await flight.update({
       airline,
       origin,
@@ -210,10 +223,16 @@ export const updateFlight = async (req, res) => {
 export const deleteFlight = async (req, res) => {
   try {
     const { id } = req.params;
+
     const flight = await Flight.findByPk(id);
     if (!flight) {
       return res.status(404).json({ message: "Vuelo no encontrado" });
     }
+
+    if (req.user?.role === "airline" && req.user.name !== flight.airline) {
+      return res.status(403).json({ message: "No tienes permiso para eliminar este vuelo." });
+    }
+
     await flight.destroy();
     res.json({ message: "Vuelo eliminado correctamente" });
   } catch (error) {
