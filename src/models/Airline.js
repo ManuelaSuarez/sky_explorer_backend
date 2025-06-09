@@ -1,4 +1,3 @@
-// models/Airline.js
 import { DataTypes } from "sequelize";
 import { sequelize } from "../db.js";
 
@@ -28,7 +27,7 @@ export const Airline = sequelize.define("airline", {
     allowNull: false,
     unique: true,
   },
-  password: { // Agregado para permitir el registro y autenticación de aerolíneas
+  password: {
     type: DataTypes.STRING,
     allowNull: false,
   },

@@ -6,8 +6,7 @@ export const getFlights = async (req, res) => {
     const { origin, destination, departureDate, airline, sort } = req.query;
 
     const whereClause = {};
-    let orderClause = [["basePrice", "ASC"]]; // Orden por defecto: precio ascendente
-
+    let orderClause = [["basePrice", "ASC"]];
 
     if (origin) {
       whereClause.origin = { [Op.like]: `${origin}%` };
@@ -38,7 +37,6 @@ export const getFlights = async (req, res) => {
           break;
 
         default:
-  
           break;
       }
     }
@@ -48,19 +46,21 @@ export const getFlights = async (req, res) => {
       order: orderClause,
     });
 
-    // Esta sección actualiza el estado de los vuelos que ya pasaron.
+    // Actualiza el estado de los vuelos que ya pasaron.
     const now = new Date();
     await Promise.all(
       flights.map(async (flight) => {
-        const flightDateTime = new Date(`${flight.date}T${flight.departureTime}`);
+        const flightDateTime = new Date(
+          `${flight.date}T${flight.departureTime}`
+        );
         if (flightDateTime < now && flight.status === "Activo") {
           flight.status = "Inactivo";
-          await flight.save(); 
+          await flight.save();
         }
       })
     );
 
-    return res.json(flights); // Devuelve los vuelos que cumplen el criterio original (status: "Activo")
+    return res.json(flights);
   } catch (error) {
     console.error("Error al obtener vuelos en el backend (getFlights):", error);
     if (res) {
@@ -112,11 +112,13 @@ export const createFlight = async (req, res) => {
     } = req.body;
 
     if (req.user?.role === "airline") {
-      // Si viene un airline distinto al del usuario, lo bloqueamos
+      // Si viene un airline distinto al del usuario se bloquea
       if (airline && airline !== req.user.name) {
-        return res.status(403).json({ message: "No puedes crear vuelos para otra aerolínea." });
+        return res
+          .status(403)
+          .json({ message: "No puedes crear vuelos para otra aerolínea." });
       }
-      airline = req.user.name; // Se fuerza el nombre de la aerolínea autenticada
+      airline = req.user.name;
     }
 
     // Validación de campos obligatorios
@@ -130,7 +132,9 @@ export const createFlight = async (req, res) => {
       !capacity ||
       !basePrice
     ) {
-      return res.status(400).json({ message: "Todos los campos son obligatorios" });
+      return res
+        .status(400)
+        .json({ message: "Todos los campos son obligatorios" });
     }
 
     const newFlight = await Flight.create({
@@ -142,7 +146,7 @@ export const createFlight = async (req, res) => {
       arrivalTime,
       capacity: Number(capacity),
       basePrice: Number(basePrice),
-      status: "Activo", // Por defecto, un nuevo vuelo es activo
+      status: "Activo",
       purchaseDate: new Date().toISOString().split("T")[0],
       createdBy: req.user ? req.user.id : null,
     });
@@ -151,7 +155,9 @@ export const createFlight = async (req, res) => {
   } catch (error) {
     console.error("Error al crear vuelo:", error);
     if (res) {
-      res.status(500).json({ message: "Error al crear el vuelo", error: error.message });
+      res
+        .status(500)
+        .json({ message: "Error al crear el vuelo", error: error.message });
     } else {
       console.error("No se pudo enviar respuesta de error: 'res' no definido.");
       throw error;
@@ -184,7 +190,9 @@ export const updateFlight = async (req, res) => {
       !capacity ||
       !basePrice
     ) {
-      return res.status(400).json({ message: "Todos los campos son obligatorios" });
+      return res
+        .status(400)
+        .json({ message: "Todos los campos son obligatorios" });
     }
 
     const flight = await Flight.findByPk(id);
@@ -192,9 +200,11 @@ export const updateFlight = async (req, res) => {
       return res.status(404).json({ message: "Vuelo no encontrado" });
     }
 
-    // 🔒 Seguridad: solo el admin o la aerolínea propietaria puede editar
+    // Seguridad: solo el admin o la aerolínea propietaria puede editar
     if (req.user?.role === "airline" && req.user.name !== flight.airline) {
-      return res.status(403).json({ message: "No tienes permiso para editar este vuelo." });
+      return res
+        .status(403)
+        .json({ message: "No tienes permiso para editar este vuelo." });
     }
 
     await flight.update({
@@ -212,7 +222,10 @@ export const updateFlight = async (req, res) => {
   } catch (error) {
     console.error("Error al actualizar vuelo:", error);
     if (res) {
-      res.status(500).json({ message: "Error al actualizar el vuelo", error: error.message });
+      res.status(500).json({
+        message: "Error al actualizar el vuelo",
+        error: error.message,
+      });
     } else {
       console.error("No se pudo enviar respuesta de error: 'res' no definido.");
       throw error;
@@ -230,7 +243,9 @@ export const deleteFlight = async (req, res) => {
     }
 
     if (req.user?.role === "airline" && req.user.name !== flight.airline) {
-      return res.status(403).json({ message: "No tienes permiso para eliminar este vuelo." });
+      return res
+        .status(403)
+        .json({ message: "No tienes permiso para eliminar este vuelo." });
     }
 
     await flight.destroy();
@@ -238,7 +253,9 @@ export const deleteFlight = async (req, res) => {
   } catch (error) {
     console.error("Error al eliminar vuelo:", error);
     if (res) {
-      res.status(500).json({ message: "Error al eliminar el vuelo", error: error.message });
+      res
+        .status(500)
+        .json({ message: "Error al eliminar el vuelo", error: error.message });
     } else {
       console.error("No se pudo enviar respuesta de error: 'res' no definido.");
       throw error;

@@ -1,16 +1,16 @@
-import bcrypt from "bcrypt"; 
-import { User } from "../models/User.js"; 
-import { Booking } from "../models/Booking.js"; 
-import { Op } from "sequelize"; 
+import bcrypt from "bcrypt";
+import { User } from "../models/User.js";
+import { Booking } from "../models/Booking.js";
+import { Op } from "sequelize";
 
-// ===== FUNCIONES PARA ADMIN (Gestión de Aerolíneas) =====
+// FUNCIONES ADMIN
 
 // Listar todos los usuarios
 export const getUsers = async (req, res) => {
   try {
     const users = await User.findAll({
-      attributes: ['id', 'name', 'email', 'role', 'createdAt'],
-      order: [["id", "DESC"]]
+      attributes: ["id", "name", "email", "role", "createdAt"],
+      order: [["id", "DESC"]],
     });
     res.json(users);
   } catch (error) {
@@ -23,13 +23,13 @@ export const getUsers = async (req, res) => {
 export const getUserById = async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id, {
-      attributes: ['id', 'name', 'email', 'role', 'createdAt']
+      attributes: ["id", "name", "email", "role", "createdAt"],
     });
-    
+
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
-    
+
     res.json(user);
   } catch (error) {
     console.error("Error al obtener usuario:", error);
@@ -44,9 +44,11 @@ export const createUser = async (req, res) => {
 
     // Validaciones básicas
     if (!name || !email || !password) {
-      return res.status(400).json({ message: "Nombre, email y contraseña son requeridos" });
+      return res
+        .status(400)
+        .json({ message: "Nombre, email y contraseña son requeridos" });
     }
-    
+
     if (password !== confirmPassword) {
       return res.status(400).json({ message: "Las contraseñas no coinciden" });
     }
@@ -63,7 +65,7 @@ export const createUser = async (req, res) => {
       name,
       email,
       password: hashedPassword,
-      role: 'airline'
+      role: "airline",
     });
 
     // Responder sin la contraseña
@@ -71,7 +73,7 @@ export const createUser = async (req, res) => {
       id: newUser.id,
       name: newUser.name,
       email: newUser.email,
-      role: newUser.role
+      role: newUser.role,
     });
   } catch (error) {
     console.error("Error al crear usuario:", error);
@@ -89,10 +91,10 @@ export const updateUser = async (req, res) => {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
-    // Verificar email único (si se está cambiando)
+    // Verificar email único
     if (email && email !== user.email) {
       const emailExists = await User.findOne({
-        where: { email, id: { [Op.ne]: req.params.id } }
+        where: { email, id: { [Op.ne]: req.params.id } },
       });
       if (emailExists) {
         return res.status(400).json({ message: "Este email ya está en uso" });
@@ -114,8 +116,8 @@ export const updateUser = async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.role
-      }
+        role: user.role,
+      },
     });
   } catch (error) {
     console.error("Error al actualizar usuario:", error);
@@ -127,24 +129,28 @@ export const updateUser = async (req, res) => {
 export const deleteUser = async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id);
-    
+
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
-    
+
     // No puede eliminarse a sí mismo
     if (req.user.id === parseInt(req.params.id)) {
-      return res.status(400).json({ message: "No puedes eliminar tu propia cuenta" });
+      return res
+        .status(400)
+        .json({ message: "No puedes eliminar tu propia cuenta" });
     }
-    
+
     // Verificar si tiene reservas
-    const bookingsCount = await Booking.count({ where: { userId: req.params.id } });
+    const bookingsCount = await Booking.count({
+      where: { userId: req.params.id },
+    });
     if (bookingsCount > 0) {
-      return res.status(400).json({ 
-        message: "No se puede eliminar: el usuario tiene reservas asociadas" 
+      return res.status(400).json({
+        message: "No se puede eliminar: el usuario tiene reservas asociadas",
       });
     }
-    
+
     await user.destroy();
     res.json({ message: "Usuario eliminado" });
   } catch (error) {
@@ -153,19 +159,19 @@ export const deleteUser = async (req, res) => {
   }
 };
 
-// ===== FUNCIONES PARA USUARIO REGULAR =====
+// FUNCIONES USER REGULAR
 
 // Ver mi perfil
 export const getMyProfile = async (req, res) => {
   try {
     const user = await User.findByPk(req.user.id, {
-      attributes: ['id', 'name', 'email', 'role', 'createdAt']
+      attributes: ["id", "name", "email", "role", "createdAt"],
     });
-    
+
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
-    
+
     res.json(user);
   } catch (error) {
     console.error("Error al obtener perfil:", error);
@@ -186,14 +192,21 @@ export const updateUserProfile = async (req, res) => {
     // Si quiere cambiar contraseña, validar la actual
     if (newPassword) {
       if (!currentPassword) {
-        return res.status(400).json({ message: "Ingresa tu contraseña actual" });
+        return res
+          .status(400)
+          .json({ message: "Ingresa tu contraseña actual" });
       }
-      
-      const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+
+      const isValidPassword = await bcrypt.compare(
+        currentPassword,
+        user.password
+      );
       if (!isValidPassword) {
-        return res.status(400).json({ message: "Contraseña actual incorrecta" });
+        return res
+          .status(400)
+          .json({ message: "Contraseña actual incorrecta" });
       }
-      
+
       user.password = await bcrypt.hash(newPassword, 10);
     }
 
@@ -209,8 +222,8 @@ export const updateUserProfile = async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.role
-      }
+        role: user.role,
+      },
     });
   } catch (error) {
     console.error("Error al actualizar perfil:", error);
@@ -222,14 +235,14 @@ export const updateUserProfile = async (req, res) => {
 export const deleteUserProfileWithBookings = async (req, res) => {
   try {
     const user = await User.findByPk(req.user.id);
-    
+
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
     // Eliminar primero todas las reservas del usuario
     await Booking.destroy({ where: { userId: req.user.id } });
-    
+
     // Luego eliminar el usuario
     await user.destroy();
 

@@ -1,6 +1,6 @@
-import { DataTypes } from "sequelize"
-import { sequelize } from "../db.js"
-import { User } from "./User.js"
+import { DataTypes } from "sequelize";
+import { sequelize } from "../db.js";
+import { User } from "./User.js";
 
 export const Flight = sequelize.define(
   "flight",
@@ -63,8 +63,8 @@ export const Flight = sequelize.define(
   },
   {
     timestamps: true,
-  },
-)
+  }
+);
 
-// Relación: Un vuelo puede ser creado por un usuario (admin)
-Flight.belongsTo(User, { foreignKey: "createdBy", as: "creator" })
+// un vuelo puede ser creado por un usuario (admin)
+Flight.belongsTo(User, { foreignKey: "createdBy", as: "creator" });

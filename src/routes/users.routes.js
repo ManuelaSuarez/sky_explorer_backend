@@ -7,18 +7,22 @@ import {
   deleteUser,
   getMyProfile,
   updateUserProfile,
-  deleteUserProfileWithBookings
+  deleteUserProfileWithBookings,
 } from "../services/users.services.js";
 import { verifyToken, checkAdmin } from "../middleware/auth.middleware.js";
 
 const router = Router();
 
-// ===== RUTAS PARA USUARIO REGULAR (Autogestión de Perfil) =====
+// Rutas para usuario regular
 router.get("/users/profile/me", verifyToken, getMyProfile);
 router.put("/users/profile/me", verifyToken, updateUserProfile);
-router.delete("/users/profile/me/with-bookings", verifyToken, deleteUserProfileWithBookings);
+router.delete(
+  "/users/profile/me/with-bookings",
+  verifyToken,
+  deleteUserProfileWithBookings
+);
 
-// ===== RUTAS PARA ADMIN (Gestión de Aerolíneas) =====
+// Rutas para admin
 router.get("/users", verifyToken, checkAdmin, getUsers);
 router.get("/users/:id", verifyToken, checkAdmin, getUserById);
 router.post("/users", verifyToken, checkAdmin, createUser);
