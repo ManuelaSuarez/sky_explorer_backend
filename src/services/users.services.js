@@ -2,6 +2,8 @@ import bcrypt from "bcrypt";
 import { User } from "../models/User.js";
 import { Booking } from "../models/Booking.js";
 import { Op } from "sequelize";
+import fs from "fs/promises";
+import path from "path";
 
 // FUNCIONES ADMIN
 
@@ -165,7 +167,7 @@ export const deleteUser = async (req, res) => {
 export const getMyProfile = async (req, res) => {
   try {
     const user = await User.findByPk(req.user.id, {
-      attributes: ["id", "name", "email", "role", "createdAt"],
+      attributes: ["id", "name", "email", "role", "profilePicture", "createdAt"],
     });
 
     if (!user) {
@@ -184,9 +186,40 @@ export const updateUserProfile = async (req, res) => {
   try {
     const { name, email, currentPassword, newPassword } = req.body;
     const user = await User.findByPk(req.user.id);
+    const file = req.file;
 
     if (!user) {
+      if (file) {
+        await fs.unlink(file.path);
+      }
       return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    // Lógica para manejar la imagen de perfil
+    if (file) {
+      // Si se subió un nuevo archivo, eliminar el anterior (si existe)
+      if (user.profilePicture) {
+        const oldImagePath = path.join("uploads", "profile-pictures", user.profilePicture);
+        // Verificar si el archivo existe antes de intentar eliminarlo
+        try {
+          await fs.access(oldImagePath);
+          await fs.unlink(oldImagePath);
+        } catch (error) {
+          console.log("No se pudo eliminar el archivo anterior:", error.message);
+        }
+      }
+      // Guardar la nueva URL del archivo
+      user.profilePicture = file.filename;
+    } else if (req.body.profilePicture === "delete" && user.profilePicture) {
+      // Lógica para eliminar la foto de perfil
+      const imagePath = path.join("uploads", "profile-pictures", user.profilePicture);
+      try {
+        await fs.access(imagePath);
+        await fs.unlink(imagePath);
+      } catch (error) {
+        console.log("No se pudo eliminar el archivo:", error.message);
+      }
+      user.profilePicture = null;
     }
 
     // Si quiere cambiar contraseña, validar la actual
@@ -223,6 +256,7 @@ export const updateUserProfile = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        profilePicture: user.profilePicture, // Asegurarse de enviar la URL actualizada
       },
     });
   } catch (error) {
@@ -238,6 +272,17 @@ export const deleteUserProfileWithBookings = async (req, res) => {
 
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    // Eliminar la foto de perfil del disco antes de eliminar al usuario
+    if (user.profilePicture) {
+        const imagePath = path.join("uploads", "profile-pictures", user.profilePicture);
+        try {
+            await fs.access(imagePath);
+            await fs.unlink(imagePath);
+        } catch (error) {
+            console.log("No se pudo eliminar la foto de perfil al eliminar el usuario:", error.message);
+        }
     }
 
     // Eliminar primero todas las reservas del usuario
