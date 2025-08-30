@@ -5,11 +5,13 @@ import flightRoutes from "./routes/flight.routes.js"
 import usersRoutes from "./routes/users.routes.js"
 import airlineRoutes from "./routes/airline.routes.js"
 import bookingRoutes from "./routes/booking.routes.js"
+import reviewRoutes from "./routes/review.routes.js"
 import { sequelize } from "./db.js"
 import "./models/User.js"
 import "./models/Flight.js"
 import "./models/Airline.js"
-import  "./models/Booking.js"
+import "./models/Booking.js"
+import "./models/Review.js"
 import cors from "cors"
 import path from "path" // Importa path
 
@@ -25,7 +27,7 @@ app.use(
 )
 
 // NUEVA LÍNEA: Servir las imágenes de la carpeta 'uploads'
-app.use("/uploads", express.static(path.join("uploads")));
+app.use("/uploads", express.static(path.join("uploads")))
 
 try {
   // Cambiar a force: true para recrear las tablas completamente
@@ -37,6 +39,7 @@ try {
   app.use("/api", usersRoutes)
   app.use("/api", airlineRoutes)
   app.use("/api", bookingRoutes)
+  app.use("/api", reviewRoutes)
 
   app.listen(PORT)
   console.log(`Server listening on port ${PORT}`)
