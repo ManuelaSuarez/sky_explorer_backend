@@ -6,6 +6,7 @@ import usersRoutes from "./routes/users.routes.js"
 import airlineRoutes from "./routes/airline.routes.js"
 import bookingRoutes from "./routes/booking.routes.js"
 import reviewRoutes from "./routes/review.routes.js"
+import paymentRoutes from "./routes/payment.routes.js"
 import { sequelize } from "./db.js"
 import "./models/User.js"
 import "./models/Flight.js"
@@ -13,7 +14,9 @@ import "./models/Airline.js"
 import "./models/Booking.js"
 import "./models/Review.js"
 import cors from "cors"
-import path from "path" // Importa path
+import path from "path"
+import { text } from "stream/consumers"
+
 
 const app = express()
 
@@ -40,6 +43,7 @@ try {
   app.use("/api", airlineRoutes)
   app.use("/api", bookingRoutes)
   app.use("/api", reviewRoutes)
+  app.use("/api", paymentRoutes)
 
   app.listen(PORT)
   console.log(`Server listening on port ${PORT}`)
