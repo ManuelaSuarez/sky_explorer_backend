@@ -1,6 +1,30 @@
 import { Flight } from "../models/Flight.js";
 import { Op } from "sequelize";
 
+// Función para calcular duración entre dos horas
+const calculateDuration = (departureTime, arrivalTime) => {
+  try {
+    const [depHour, depMin] = departureTime.split(':').map(Number);
+    const [arrHour, arrMin] = arrivalTime.split(':').map(Number);
+    
+    const depMinutes = depHour * 60 + depMin;
+    let arrMinutes = arrHour * 60 + arrMin;
+    
+    // Si la hora de llegada es menor, asumimos que es del día siguiente
+    if (arrMinutes < depMinutes) {
+      arrMinutes += 24 * 60;
+    }
+    
+    const totalMinutes = arrMinutes - depMinutes;
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    
+    return `${hours}h ${minutes}m`;
+  } catch (error) {
+    return "—";
+  }
+};
+
 export const getFlights = async (req, res) => {
   try {
     const { origin, destination, departureDate, airline, sort } = req.query;
@@ -60,7 +84,19 @@ export const getFlights = async (req, res) => {
       })
     );
 
-    return res.json(flights);
+    // Agregar duración calculada a cada vuelo
+    const flightsWithDuration = flights.map(flight => {
+      const flightData = flight.toJSON();
+      const duration = calculateDuration(flightData.departureTime, flightData.arrivalTime);
+      
+      return {
+        ...flightData,
+        duration,
+        returnDuration: duration, // Para vuelos de regreso
+      };
+    });
+
+    return res.json(flightsWithDuration);
   } catch (error) {
     console.error("Error al obtener vuelos en el backend (getFlights):", error);
     if (res) {
@@ -83,7 +119,16 @@ export const getFlightById = async (req, res) => {
     if (!flight) {
       return res.status(404).json({ message: "Vuelo no encontrado" });
     }
-    return res.json(flight);
+
+    // Agregar duración al vuelo individual también
+    const flightData = flight.toJSON();
+    const duration = calculateDuration(flightData.departureTime, flightData.arrivalTime);
+    
+    return res.json({
+      ...flightData,
+      duration,
+      returnDuration: duration,
+    });
   } catch (error) {
     console.error("Error al obtener vuelo por ID:", error);
     if (res) {
@@ -151,7 +196,15 @@ export const createFlight = async (req, res) => {
       createdBy: req.user ? req.user.id : null,
     });
 
-    res.status(201).json(newFlight);
+    // Agregar duración al vuelo recién creado
+    const flightData = newFlight.toJSON();
+    const duration = calculateDuration(flightData.departureTime, flightData.arrivalTime);
+
+    res.status(201).json({
+      ...flightData,
+      duration,
+      returnDuration: duration,
+    });
   } catch (error) {
     console.error("Error al crear vuelo:", error);
     if (res) {
@@ -218,7 +271,15 @@ export const updateFlight = async (req, res) => {
       basePrice: Number(basePrice),
     });
 
-    res.json(flight);
+    // Agregar duración al vuelo actualizado
+    const flightData = flight.toJSON();
+    const duration = calculateDuration(flightData.departureTime, flightData.arrivalTime);
+
+    res.json({
+      ...flightData,
+      duration,
+      returnDuration: duration,
+    });
   } catch (error) {
     console.error("Error al actualizar vuelo:", error);
     if (res) {
@@ -272,7 +333,19 @@ export const toggleFlightStatus = async (req, res) => {
     }
     const newStatus = flight.status === "Activo" ? "Inactivo" : "Activo";
     await flight.update({ status: newStatus });
-    res.json({ message: `Estado del vuelo cambiado a ${newStatus}`, flight });
+
+    // Agregar duración también aquí
+    const flightData = flight.toJSON();
+    const duration = calculateDuration(flightData.departureTime, flightData.arrivalTime);
+
+    res.json({ 
+      message: `Estado del vuelo cambiado a ${newStatus}`, 
+      flight: {
+        ...flightData,
+        duration,
+        returnDuration: duration,
+      }
+    });
   } catch (error) {
     console.error("Error al cambiar estado del vuelo:", error);
     if (res) {
