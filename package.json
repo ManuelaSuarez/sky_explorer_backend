@@ -11,8 +11,10 @@
   "dependencies": {
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
+    "mercadopago": "^2.9.0",
     "morgan": "^1.10.0",
     "multer": "^2.0.2",
     "react": "^19.1.0",

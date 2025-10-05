@@ -1,8 +1,4 @@
 import { MercadoPagoConfig, Preference } from "mercadopago"
-import dotenv from "dotenv"
-
-// Configuración de Dot Env
-dotenv.config()
 
 // Configuración Mercado Pago
 const mercadopago = new MercadoPagoConfig({ access_token: process.env.MP_ACCESS_TOKEN }) 
