@@ -1,3 +1,5 @@
+import dotenv from "dotenv"
+dotenv.config()
 import express from "express"
 import { PORT } from "./config.js"
 import authRoutes from "./routes/auth.routes.js"
@@ -18,9 +20,7 @@ import "./models/Favorite.js"
 import cors from "cors"
 import path from "path"
 import { text } from "stream/consumers"
-import dotenv from "dotenv"
 
-dotenv.config()
 
 const app = express()
 
@@ -55,5 +55,3 @@ try {
 } catch (error) {
   console.log("Error de inicialización:", error)
 }
-
-console.log(process.env.JWT_SECRET)
