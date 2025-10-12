@@ -1,3 +1,4 @@
+// src/routes/flight.routes.js
 import { Router } from "express";
 import {
   getFlights,
@@ -6,6 +7,8 @@ import {
   updateFlight,
   deleteFlight,
   toggleFlightStatus,
+  getFeaturedFlights,
+  getAllFlights, // ← NUEVO
 } from "../services/flights.services.js";
 
 import {
@@ -13,21 +16,39 @@ import {
   checkAdminOrAirline,
 } from "../middleware/auth.middleware.js";
 
+import { uploadFlight } from "../middleware/upload.middleware.js";
+
 const router = Router();
 
-// Rutas públicas
-router.get("/flights", getFlights); //Devuelve la lista de vuelos.
-router.get("/flights/:id", getFlightById); // Devuelve la información de un vuelo específico por su id.
+// Públicas
+router.get("/flights/featured", getFeaturedFlights); // ← PRIMERO las rutas específicas
+router.get("/flights/all", verifyToken, checkAdminOrAirline, getAllFlights); // ← ANTES de :id
+router.get("/flights/:id", getFlightById); // ← ID al final
+router.get("/flights", getFlights); // ← Lista general al final
 
-// Rutas protegidas para administración de vuelos (admin Y aerolíneas)
-router.post("/flights", verifyToken, checkAdminOrAirline, createFlight); //Crear un nuevo vuelo.
-router.put("/flights/:id", verifyToken, checkAdminOrAirline, updateFlight); //Actualizar un vuelo existente.
-router.delete("/flights/:id", verifyToken, checkAdminOrAirline, deleteFlight); //Eliminar un vuelo.
+router.post(
+  "/flights",
+  verifyToken,
+  checkAdminOrAirline,
+  uploadFlight.single("image"),
+  createFlight
+);
+
+router.put(
+  "/flights/:id",
+  verifyToken,
+  checkAdminOrAirline,
+  uploadFlight.single("image"),
+  updateFlight
+);
+
+router.delete("/flights/:id", verifyToken, checkAdminOrAirline, deleteFlight);
+
 router.patch(
   "/flights/:id/toggle-status",
   verifyToken,
   checkAdminOrAirline,
   toggleFlightStatus
-); // Cambiar el estado del vuelo
+);
 
 export default router;

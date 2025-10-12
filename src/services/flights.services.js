@@ -1,3 +1,4 @@
+// src/services/flights.services.js
 import { Flight } from "../models/Flight.js";
 import { Op } from "sequelize";
 
@@ -6,43 +7,117 @@ const calculateDuration = (departureTime, arrivalTime) => {
   try {
     const [depHour, depMin] = departureTime.split(':').map(Number);
     const [arrHour, arrMin] = arrivalTime.split(':').map(Number);
-    
+
     const depMinutes = depHour * 60 + depMin;
     let arrMinutes = arrHour * 60 + arrMin;
-    
-    // Si la hora de llegada es menor, asumimos que es del día siguiente
+
     if (arrMinutes < depMinutes) {
       arrMinutes += 24 * 60;
     }
-    
+
     const totalMinutes = arrMinutes - depMinutes;
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
-    
+
     return `${hours}h ${minutes}m`;
   } catch (error) {
     return "—";
   }
 };
 
+// ✅ NUEVO: Obtener TODOS los vuelos (para administración)
+export const getAllFlights = async (req, res) => {
+  try {
+    const flights = await Flight.findAll({
+      order: [["createdAt", "DESC"]],
+    });
+
+    // Actualizar estado de vuelos pasados
+    const now = new Date();
+    await Promise.all(
+      flights.map(async (flight) => {
+        const flightDateTime = new Date(`${flight.date}T${flight.departureTime}`);
+        if (flightDateTime < now && flight.status === "Activo") {
+          flight.status = "Inactivo";
+          await flight.save();
+        }
+      })
+    );
+
+    const flightsWithDuration = flights.map((flight) => {
+      const flightData = flight.toJSON();
+      const duration = calculateDuration(flightData.departureTime, flightData.arrivalTime);
+      return {
+        ...flightData,
+        duration,
+        returnDuration: duration,
+      };
+    });
+
+    console.log("✅ Todos los vuelos (admin) cargados:", flightsWithDuration.length);
+    return res.json(flightsWithDuration);
+  } catch (error) {
+    console.error("❌ Error al obtener todos los vuelos:", error.message);
+    return res.status(500).json({
+      message: "Error al obtener los vuelos",
+      error: error.message,
+    });
+  }
+};
+
+// ✅ VUELOS DESTACADOS - Movido al principio
+export const getFeaturedFlights = async (_req, res) => {
+  try {
+    const flights = await Flight.findAll({
+      where: { 
+        isFeatured: true,
+        status: "Activo"
+      },
+      attributes: ["id", "origin", "destination", "basePrice", "imageUrl", "airline","date"],
+      limit: 6,
+    });
+    
+    console.log("✅ Vuelos destacados encontrados:", flights.length);
+    res.json(flights);
+  } catch (error) {
+    console.error("❌ Error en getFeaturedFlights:", error.message);
+    console.error("Stack:", error.stack);
+    res.status(500).json({ 
+      message: "Error al cargar destacados",
+      error: error.message 
+    });
+  }
+};
+
+// Obtener todos los vuelos (con filtros y orden)
 export const getFlights = async (req, res) => {
   try {
-    const { origin, destination, departureDate, airline, sort } = req.query;
+    let { origin, destination, departureDate, airline, sort } = req.query;
 
-    const whereClause = {};
+    // 🔹 Decodificar parámetros (importante si hay tildes o espacios)
+    origin = origin ? decodeURIComponent(origin) : null;
+    destination = destination ? decodeURIComponent(destination) : null;
+    departureDate = departureDate ? decodeURIComponent(departureDate) : null;
+
+    const whereClause = {
+      status: "Activo"
+    };
+
     let orderClause = [["basePrice", "ASC"]];
 
+    // 🔹 Filtros
     if (origin) {
-      whereClause.origin = { [Op.like]: `${origin}%` };
+      whereClause.origin = { [Op.like]: `%${origin}%` };
     }
 
     if (destination) {
-      whereClause.destination = { [Op.like]: `${destination}%` };
+      whereClause.destination = { [Op.like]: `%${destination}%` };
     }
 
     if (departureDate) {
-      // Asegurarse de que la fecha coincida exactamente
-      whereClause.date = departureDate;
+      // 🔹 Asegurar formato correcto YYYY-MM-DD
+      const parsedDate = new Date(departureDate).toISOString().split("T")[0];
+      whereClause.date = parsedDate;
     }
 
     if (airline) {
@@ -50,7 +125,7 @@ export const getFlights = async (req, res) => {
       whereClause.airline = { [Op.in]: airlinesToFilter };
     }
 
-    // Lógica de ordenamiento
+    // 🔹 Orden
     if (sort) {
       switch (sort) {
         case "priceAsc":
@@ -59,24 +134,22 @@ export const getFlights = async (req, res) => {
         case "priceDesc":
           orderClause = [["basePrice", "DESC"]];
           break;
-
         default:
           break;
       }
     }
 
+    // 🔹 Buscar vuelos
     const flights = await Flight.findAll({
       where: whereClause,
       order: orderClause,
     });
 
-    // Actualiza el estado de los vuelos que ya pasaron.
+    // 🔹 Actualizar estado de vuelos pasados
     const now = new Date();
     await Promise.all(
       flights.map(async (flight) => {
-        const flightDateTime = new Date(
-          `${flight.date}T${flight.departureTime}`
-        );
+        const flightDateTime = new Date(`${flight.date}T${flight.departureTime}`);
         if (flightDateTime < now && flight.status === "Activo") {
           flight.status = "Inactivo";
           await flight.save();
@@ -84,34 +157,31 @@ export const getFlights = async (req, res) => {
       })
     );
 
-    // Agregar duración calculada a cada vuelo
-    const flightsWithDuration = flights.map(flight => {
+    // 🔹 Calcular duración
+    const flightsWithDuration = flights.map((flight) => {
       const flightData = flight.toJSON();
       const duration = calculateDuration(flightData.departureTime, flightData.arrivalTime);
-      
       return {
         ...flightData,
         duration,
-        returnDuration: duration, // Para vuelos de regreso
+        returnDuration: duration,
       };
     });
 
+    console.log("✅ Vuelos filtrados cargados:", flightsWithDuration.length);
     return res.json(flightsWithDuration);
   } catch (error) {
-    console.error("Error al obtener vuelos en el backend (getFlights):", error);
-    if (res) {
-      return res.status(500).json({
-        message: "Error al obtener los vuelos desde el servidor.",
-        error: error.message,
-        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
-      });
-    } else {
-      console.error("No se pudo enviar respuesta de error: 'res' no definido.");
-      throw error;
-    }
+    console.error("❌ Error al obtener vuelos:", error.message);
+    console.error("Stack:", error.stack);
+    return res.status(500).json({
+      message: "Error al obtener los vuelos",
+      error: error.message,
+    });
   }
 };
 
+
+// Obtener vuelo por ID
 export const getFlightById = async (req, res) => {
   const { id } = req.params;
   try {
@@ -120,85 +190,53 @@ export const getFlightById = async (req, res) => {
       return res.status(404).json({ message: "Vuelo no encontrado" });
     }
 
-    // Agregar duración al vuelo individual también
     const flightData = flight.toJSON();
     const duration = calculateDuration(flightData.departureTime, flightData.arrivalTime);
-    
+
     return res.json({
       ...flightData,
       duration,
       returnDuration: duration,
     });
   } catch (error) {
-    console.error("Error al obtener vuelo por ID:", error);
-    if (res) {
-      return res.status(500).json({
-        message: "Error al obtener el vuelo por ID",
-        error: error.message,
-      });
-    } else {
-      console.error("No se pudo enviar respuesta de error: 'res' no definido.");
-      throw error;
-    }
+    console.error("❌ Error al obtener vuelo por ID:", error.message);
+    return res.status(500).json({
+      message: "Error al obtener el vuelo por ID",
+      error: error.message,
+    });
   }
 };
 
+// Crear vuelo (con imagen y destacado)
 export const createFlight = async (req, res) => {
   try {
-    let {
-      airline,
-      origin,
-      destination,
-      date,
-      departureTime,
-      arrivalTime,
-      capacity,
-      basePrice,
+    const {
+      airline, origin, destination, date,
+      departureTime, arrivalTime, capacity, basePrice, isFeatured
     } = req.body;
 
-    if (req.user?.role === "airline") {
-      // Si viene un airline distinto al del usuario se bloquea
-      if (airline && airline !== req.user.name) {
-        return res
-          .status(403)
-          .json({ message: "No puedes crear vuelos para otra aerolínea." });
-      }
-      airline = req.user.name;
-    }
+    console.log("📝 Creando vuelo con datos:", { airline, origin, destination, isFeatured });
 
-    // Validación de campos obligatorios
-    if (
-      !airline ||
-      !origin ||
-      !destination ||
-      !date ||
-      !departureTime ||
-      !arrivalTime ||
-      !capacity ||
-      !basePrice
-    ) {
-      return res
-        .status(400)
-        .json({ message: "Todos los campos son obligatorios" });
-    }
+    const imageUrl = req.file ? `/uploads/flights/${req.file.filename}` : null;
 
-    const newFlight = await Flight.create({
-      airline,
-      origin,
-      destination,
+    const flight = await Flight.create({
+      airline, 
+      origin, 
+      destination, 
       date,
-      departureTime,
-      arrivalTime,
-      capacity: Number(capacity),
+      departureTime, 
+      arrivalTime, 
+      capacity: Number(capacity), 
       basePrice: Number(basePrice),
-      status: "Activo",
-      purchaseDate: new Date().toISOString().split("T")[0],
-      createdBy: req.user ? req.user.id : null,
+      isFeatured: isFeatured === "true" || isFeatured === true,
+      imageUrl,
+      createdBy: req.user.id,
     });
 
-    // Agregar duración al vuelo recién creado
-    const flightData = newFlight.toJSON();
+    const flightData = flight.toJSON();
     const duration = calculateDuration(flightData.departureTime, flightData.arrivalTime);
+
+    console.log("✅ Vuelo creado exitosamente:", flight.id);
 
     res.status(201).json({
       ...flightData,
@@ -206,74 +244,57 @@ export const createFlight = async (req, res) => {
       returnDuration: duration,
     });
   } catch (error) {
-    console.error("Error al crear vuelo:", error);
-    if (res) {
-      res
-        .status(500)
-        .json({ message: "Error al crear el vuelo", error: error.message });
-    } else {
-      console.error("No se pudo enviar respuesta de error: 'res' no definido.");
-      throw error;
-    }
+    console.error("❌ Error al crear vuelo:", error.message);
+    console.error("Stack:", error.stack);
+    return res.status(500).json({
+      message: "Error al crear el vuelo",
+      error: error.message,
+    });
   }
 };
 
+// Actualizar vuelo
 export const updateFlight = async (req, res) => {
   try {
     const { id } = req.params;
     const {
-      airline,
-      origin,
-      destination,
-      date,
-      departureTime,
-      arrivalTime,
-      capacity,
-      basePrice,
+      airline, origin, destination, date,
+      departureTime, arrivalTime, capacity, basePrice, isFeatured
     } = req.body;
-
-    // Validación de campos obligatorios para la actualización
-    if (
-      !airline ||
-      !origin ||
-      !destination ||
-      !date ||
-      !departureTime ||
-      !arrivalTime ||
-      !capacity ||
-      !basePrice
-    ) {
-      return res
-        .status(400)
-        .json({ message: "Todos los campos son obligatorios" });
-    }
 
     const flight = await Flight.findByPk(id);
     if (!flight) {
       return res.status(404).json({ message: "Vuelo no encontrado" });
     }
 
-    // Seguridad: solo el admin o la aerolínea propietaria puede editar
     if (req.user?.role === "airline" && req.user.name !== flight.airline) {
-      return res
-        .status(403)
-        .json({ message: "No tienes permiso para editar este vuelo." });
+      return res.status(403).json({ message: "No tienes permiso para editar este vuelo." });
     }
 
-    await flight.update({
-      airline,
-      origin,
-      destination,
+    // ✅ Actualizar imagen solo si se envió una nueva
+    const updateData = {
+      airline, 
+      origin, 
+      destination, 
       date,
-      departureTime,
-      arrivalTime,
-      capacity: Number(capacity),
+      departureTime, 
+      arrivalTime, 
+      capacity: Number(capacity), 
       basePrice: Number(basePrice),
-    });
+      isFeatured: isFeatured === "true" || isFeatured === true,
+    };
 
-    // Agregar duración al vuelo actualizado
+    // Si hay nueva imagen, actualizarla
+    if (req.file) {
+      updateData.imageUrl = `/uploads/flights/${req.file.filename}`;
+    }
+
+    await flight.update(updateData);
+
     const flightData = flight.toJSON();
     const duration = calculateDuration(flightData.departureTime, flightData.arrivalTime);
+
+    console.log("✅ Vuelo actualizado:", id);
 
     res.json({
       ...flightData,
@@ -281,19 +302,15 @@ export const updateFlight = async (req, res) => {
       returnDuration: duration,
     });
   } catch (error) {
-    console.error("Error al actualizar vuelo:", error);
-    if (res) {
-      res.status(500).json({
-        message: "Error al actualizar el vuelo",
-        error: error.message,
-      });
-    } else {
-      console.error("No se pudo enviar respuesta de error: 'res' no definido.");
-      throw error;
-    }
+    console.error("❌ Error al actualizar vuelo:", error.message);
+    return res.status(500).json({
+      message: "Error al actualizar el vuelo",
+      error: error.message,
+    });
   }
 };
 
+// Eliminar vuelo
 export const deleteFlight = async (req, res) => {
   try {
     const { id } = req.params;
@@ -304,26 +321,22 @@ export const deleteFlight = async (req, res) => {
     }
 
     if (req.user?.role === "airline" && req.user.name !== flight.airline) {
-      return res
-        .status(403)
-        .json({ message: "No tienes permiso para eliminar este vuelo." });
+      return res.status(403).json({ message: "No tienes permiso para eliminar este vuelo." });
     }
 
     await flight.destroy();
+    console.log("✅ Vuelo eliminado:", id);
     res.json({ message: "Vuelo eliminado correctamente" });
   } catch (error) {
-    console.error("Error al eliminar vuelo:", error);
-    if (res) {
-      res
-        .status(500)
-        .json({ message: "Error al eliminar el vuelo", error: error.message });
-    } else {
-      console.error("No se pudo enviar respuesta de error: 'res' no definido.");
-      throw error;
-    }
+    console.error("❌ Error al eliminar vuelo:", error.message);
+    return res.status(500).json({
+      message: "Error al eliminar el vuelo",
+      error: error.message,
+    });
   }
 };
 
+// Cambiar estado de vuelo
 export const toggleFlightStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -331,31 +344,28 @@ export const toggleFlightStatus = async (req, res) => {
     if (!flight) {
       return res.status(404).json({ message: "Vuelo no encontrado" });
     }
+
     const newStatus = flight.status === "Activo" ? "Inactivo" : "Activo";
     await flight.update({ status: newStatus });
 
-    // Agregar duración también aquí
     const flightData = flight.toJSON();
     const duration = calculateDuration(flightData.departureTime, flightData.arrivalTime);
 
-    res.json({ 
-      message: `Estado del vuelo cambiado a ${newStatus}`, 
+    console.log("✅ Estado cambiado:", id, newStatus);
+
+    res.json({
+      message: `Estado del vuelo cambiado a ${newStatus}`,
       flight: {
         ...flightData,
         duration,
         returnDuration: duration,
-      }
+      },
     });
   } catch (error) {
-    console.error("Error al cambiar estado del vuelo:", error);
-    if (res) {
-      res.status(500).json({
-        message: "Error al cambiar el estado del vuelo",
-        error: error.message,
-      });
-    } else {
-      console.error("No se pudo enviar respuesta de error: 'res' no definido.");
-      throw error;
-    }
+    console.error("❌ Error al cambiar estado del vuelo:", error.message);
+    return res.status(500).json({
+      message: "Error al cambiar el estado del vuelo",
+      error: error.message,
+    });
   }
 };

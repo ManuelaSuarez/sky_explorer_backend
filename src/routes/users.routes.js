@@ -10,7 +10,7 @@ import {
   deleteUserProfileWithBookings,
 } from "../services/users.services.js";
 import { verifyToken, checkAdmin } from "../middleware/auth.middleware.js";
-import upload from "../middleware/upload.middleware.js"; // Importa el middleware de subida
+import { upload } from "../middleware/upload.middleware.js";
 
 const router = Router();
 

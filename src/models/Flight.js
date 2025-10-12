@@ -1,3 +1,4 @@
+// src/models/Flight.js
 import { DataTypes } from "sequelize";
 import { sequelize } from "../db.js";
 import { User } from "./User.js";
@@ -60,11 +61,18 @@ export const Flight = sequelize.define(
         key: "id",
       },
     },
+    imageUrl: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    isFeatured: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
   },
   {
     timestamps: true,
   }
 );
 
-// un vuelo puede ser creado por un usuario (admin)
 Flight.belongsTo(User, { foreignKey: "createdBy", as: "creator" });
