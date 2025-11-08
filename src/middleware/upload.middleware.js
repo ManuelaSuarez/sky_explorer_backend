@@ -1,4 +1,3 @@
-// src/middleware/upload.middleware.js
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -27,7 +26,7 @@ const fileFilter = (_req, file, cb) => {
 
 export const upload = multer({ storage, fileFilter });
 
-// ✅ NUEVO: para imágenes de vuelos
+// Para imágenes de vuelos
 const storageFlight = multer.diskStorage({
   destination: (_req, _file, cb) => {
     const dir = path.resolve("uploads", "flights");

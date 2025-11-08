@@ -14,16 +14,16 @@ export const createReview = async (req, res) => {
       return res.status(404).json({ message: "Vuelo no encontrado" })
     }
 
-    // Verificar que el usuario no haya reseñado ya este vuelo
-    const existingReview = await Review.findOne({
-      where: { userId, flightId },
-    })
+    // Verificar que el usuario no haya reseñado ya esta aerolinea
+const existingReview = await Review.findOne({
+  where: { userId, airline },
+});
 
-    if (existingReview) {
-      return res.status(400).json({
-        message: "Ya has reseñado este vuelo",
-      })
-    }
+if (existingReview) {
+  return res.status(400).json({
+    message: "Ya has reseñado esta aerolínea",
+  });
+}
 
     // Crear la reseña
     const review = await Review.create({

@@ -1,4 +1,3 @@
-// src/services/flights.services.js
 import { Flight } from "../models/Flight.js";
 import { Op } from "sequelize";
 
@@ -25,7 +24,7 @@ const calculateDuration = (departureTime, arrivalTime) => {
   }
 };
 
-// ✅ NUEVO: Obtener TODOS los vuelos (para administración)
+// Obtener TODOS los vuelos (para administración)
 export const getAllFlights = async (req, res) => {
   try {
     const flights = await Flight.findAll({
@@ -54,10 +53,10 @@ export const getAllFlights = async (req, res) => {
       };
     });
 
-    console.log("✅ Todos los vuelos (admin) cargados:", flightsWithDuration.length);
+    console.log("Todos los vuelos (admin) cargados:", flightsWithDuration.length);
     return res.json(flightsWithDuration);
   } catch (error) {
-    console.error("❌ Error al obtener todos los vuelos:", error.message);
+    console.error("Error al obtener todos los vuelos:", error.message);
     return res.status(500).json({
       message: "Error al obtener los vuelos",
       error: error.message,
@@ -65,7 +64,7 @@ export const getAllFlights = async (req, res) => {
   }
 };
 
-// ✅ VUELOS DESTACADOS - Movido al principio
+// VUELOS DESTACADOS - Movido al principio
 export const getFeaturedFlights = async (_req, res) => {
   try {
     const flights = await Flight.findAll({
@@ -77,10 +76,10 @@ export const getFeaturedFlights = async (_req, res) => {
       limit: 6,
     });
     
-    console.log("✅ Vuelos destacados encontrados:", flights.length);
+    console.log("Vuelos destacados encontrados:", flights.length);
     res.json(flights);
   } catch (error) {
-    console.error("❌ Error en getFeaturedFlights:", error.message);
+    console.error("Error en getFeaturedFlights:", error.message);
     console.error("Stack:", error.stack);
     res.status(500).json({ 
       message: "Error al cargar destacados",
@@ -94,7 +93,7 @@ export const getFlights = async (req, res) => {
   try {
     let { origin, destination, departureDate, airline, sort } = req.query;
 
-    // 🔹 Decodificar parámetros (importante si hay tildes o espacios)
+    // Decodificar parámetros (importante si hay tildes o espacios)
     origin = origin ? decodeURIComponent(origin) : null;
     destination = destination ? decodeURIComponent(destination) : null;
     departureDate = departureDate ? decodeURIComponent(departureDate) : null;
@@ -105,7 +104,7 @@ export const getFlights = async (req, res) => {
 
     let orderClause = [["basePrice", "ASC"]];
 
-    // 🔹 Filtros
+    // Filtros
     if (origin) {
       whereClause.origin = { [Op.like]: `%${origin}%` };
     }
@@ -115,7 +114,7 @@ export const getFlights = async (req, res) => {
     }
 
     if (departureDate) {
-      // 🔹 Asegurar formato correcto YYYY-MM-DD
+      // Asegurar formato correcto YYYY-MM-DD
       const parsedDate = new Date(departureDate).toISOString().split("T")[0];
       whereClause.date = parsedDate;
     }
@@ -125,7 +124,7 @@ export const getFlights = async (req, res) => {
       whereClause.airline = { [Op.in]: airlinesToFilter };
     }
 
-    // 🔹 Orden
+    // Orden
     if (sort) {
       switch (sort) {
         case "priceAsc":
@@ -139,13 +138,13 @@ export const getFlights = async (req, res) => {
       }
     }
 
-    // 🔹 Buscar vuelos
+    // Buscar vuelos
     const flights = await Flight.findAll({
       where: whereClause,
       order: orderClause,
     });
 
-    // 🔹 Actualizar estado de vuelos pasados
+    // Actualizar estado de vuelos pasados
     const now = new Date();
     await Promise.all(
       flights.map(async (flight) => {
@@ -157,7 +156,7 @@ export const getFlights = async (req, res) => {
       })
     );
 
-    // 🔹 Calcular duración
+    // Calcular duración
     const flightsWithDuration = flights.map((flight) => {
       const flightData = flight.toJSON();
       const duration = calculateDuration(flightData.departureTime, flightData.arrivalTime);
@@ -168,10 +167,10 @@ export const getFlights = async (req, res) => {
       };
     });
 
-    console.log("✅ Vuelos filtrados cargados:", flightsWithDuration.length);
+    console.log("Vuelos filtrados cargados:", flightsWithDuration.length);
     return res.json(flightsWithDuration);
   } catch (error) {
-    console.error("❌ Error al obtener vuelos:", error.message);
+    console.error("Error al obtener vuelos:", error.message);
     console.error("Stack:", error.stack);
     return res.status(500).json({
       message: "Error al obtener los vuelos",
@@ -199,7 +198,7 @@ export const getFlightById = async (req, res) => {
       returnDuration: duration,
     });
   } catch (error) {
-    console.error("❌ Error al obtener vuelo por ID:", error.message);
+    console.error("Error al obtener vuelo por ID:", error.message);
     return res.status(500).json({
       message: "Error al obtener el vuelo por ID",
       error: error.message,
@@ -215,7 +214,7 @@ export const createFlight = async (req, res) => {
       departureTime, arrivalTime, capacity, basePrice, isFeatured
     } = req.body;
 
-    console.log("📝 Creando vuelo con datos:", { airline, origin, destination, isFeatured });
+    console.log("Creando vuelo con datos:", { airline, origin, destination, isFeatured });
 
     const imageUrl = req.file ? `/uploads/flights/${req.file.filename}` : null;
 
@@ -244,7 +243,7 @@ export const createFlight = async (req, res) => {
       returnDuration: duration,
     });
   } catch (error) {
-    console.error("❌ Error al crear vuelo:", error.message);
+    console.error("Error al crear vuelo:", error.message);
     console.error("Stack:", error.stack);
     return res.status(500).json({
       message: "Error al crear el vuelo",
@@ -271,7 +270,7 @@ export const updateFlight = async (req, res) => {
       return res.status(403).json({ message: "No tienes permiso para editar este vuelo." });
     }
 
-    // ✅ Actualizar imagen solo si se envió una nueva
+    // Actualizar imagen solo si se envió una nueva
     const updateData = {
       airline, 
       origin, 

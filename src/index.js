@@ -13,7 +13,7 @@ import "./models/Flight.js"
 import "./models/Airline.js"
 import "./models/Booking.js"
 import "./models/Review.js"
-import "./models/Favorite.js"; // 👈 agregala abajo de los demás modelos
+import "./models/Favorite.js"; 
 import cors from "cors"
 import path from "path" // Importa path
 
@@ -28,7 +28,7 @@ app.use(
   }),
 )
 
-// NUEVA LÍNEA: Servir las imágenes de la carpeta 'uploads'
+// Servir las imágenes de la carpeta 'uploads'
 app.use("/uploads", express.static(path.join("uploads")))
 
 try {

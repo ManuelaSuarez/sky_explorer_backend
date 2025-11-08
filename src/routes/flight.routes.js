@@ -1,4 +1,3 @@
-// src/routes/flight.routes.js
 import { Router } from "express";
 import {
   getFlights,
