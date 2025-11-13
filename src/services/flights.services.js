@@ -237,6 +237,19 @@ export const createFlight = async (req, res) => {
 
     console.log("✅ Vuelo creado exitosamente:", flight.id);
 
+    if (!airline || !origin || !destination || !date || !departureTime || !arrivalTime) {
+      return res.status(400).json({ message: "Todos los campos son obligatorios." });
+    }
+
+    // Validar capacidad y precio
+    if (capacity <= 0) {
+      return res.status(400).json({ message: "La capacidad del vuelo debe ser mayor a 0." });
+    }
+
+    if (basePrice <= 0) {
+      return res.status(400).json({ message: "El precio base debe ser mayor a 0." });
+    }
+
     res.status(201).json({
       ...flightData,
       duration,
@@ -269,6 +282,21 @@ export const updateFlight = async (req, res) => {
     if (req.user?.role === "airline" && req.user.name !== flight.airline) {
       return res.status(403).json({ message: "No tienes permiso para editar este vuelo." });
     }
+
+        // Validar campos requeridos
+    if (!airline || !origin || !destination || !date || !departureTime || !arrivalTime) {
+      return res.status(400).json({ message: "Todos los campos son obligatorios." });
+    }
+
+    // Validar capacidad y precio
+    if (capacity <= 0) {
+      return res.status(400).json({ message: "La capacidad del vuelo debe ser mayor a 0." });
+    }
+
+    if (basePrice <= 0) {
+      return res.status(400).json({ message: "El precio base debe ser mayor a 0." });
+    }
+
 
     // Actualizar imagen solo si se envió una nueva
     const updateData = {
