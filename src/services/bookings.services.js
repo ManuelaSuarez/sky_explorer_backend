@@ -1,7 +1,7 @@
 import { Booking } from "../models/Booking.js";
 import { Flight } from "../models/Flight.js";
 
-// Crear una nueva reserva
+// Crear una nueva reserva con validación de capacidad
 export const createBooking = async (req, res) => {
   try {
     const { flightId, passengers, totalPrice } = req.body;
@@ -11,20 +11,39 @@ export const createBooking = async (req, res) => {
       return res.status(400).json({ message: "Datos de reserva incompletos" });
     }
 
+    // Buscar vuelo
     const flight = await Flight.findByPk(flightId);
     if (!flight) {
       return res.status(404).json({ message: "Vuelo no encontrado" });
     }
 
+    // Contar cuántos pasajeros ya fueron reservados en este vuelo
+    const totalReservados = await Booking.sum("passengerCount", {
+      where: { flightId },
+    });
+
+    const reservados = totalReservados || 0;
+    const disponibles = flight.capacity - reservados;
+    const pasajerosSolicitados = passengers.length;
+
+    // Validar capacidad
+    if (pasajerosSolicitados > disponibles) {
+      return res.status(400).json({
+        message: `Solo quedan ${disponibles} asientos disponibles en este vuelo.`,
+      });
+    }
+
+    // Crear reserva
     const booking = await Booking.create({
-      userId: userId,
+      userId,
       flightId,
       passengers,
-      passengerCount: passengers.length,
+      passengerCount: pasajerosSolicitados,
       totalPrice,
       status: "Activo",
     });
 
+    // Obtener datos del vuelo asociado
     const bookingWithFlight = await Booking.findByPk(booking.id, {
       include: [{ model: Flight, as: "flight" }],
     });
