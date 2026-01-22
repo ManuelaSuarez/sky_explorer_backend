@@ -31,9 +31,20 @@ export const Favorite = sequelize.define(
   }
 );
 
-/*  associations  */
-User.belongsToMany(Flight, { through: Favorite, as: "favFlights", foreignKey: "userId" });
-Flight.belongsToMany(User, { through: Favorite, as: "favUsers", foreignKey: "flightId" });
+/*  Asociaciones  */
+User.belongsToMany(Flight, {
+  through: Favorite,
+  as: "favFlights",
+  foreignKey: "userId",
+  onDelete: "CASCADE",
+});
+
+Flight.belongsToMany(User, {
+  through: Favorite,
+  as: "favUsers",
+  foreignKey: "flightId",
+  onDelete: "CASCADE",
+});
 
 Favorite.belongsTo(User, { foreignKey: "userId", as: "user" });
 Favorite.belongsTo(Flight, { foreignKey: "flightId", as: "flight" });

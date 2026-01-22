@@ -7,7 +7,7 @@ import {
   deleteFlight,
   toggleFlightStatus,
   getFeaturedFlights,
-  getAllFlights, // ← NUEVO
+  getAllFlights, 
 } from "../services/flights.services.js";
 
 import {
@@ -20,10 +20,10 @@ import { uploadFlight } from "../middleware/upload.middleware.js";
 const router = Router();
 
 // Públicas
-router.get("/flights/featured", getFeaturedFlights); // ← PRIMERO las rutas específicas
-router.get("/flights/all", verifyToken, checkAdminOrAirline, getAllFlights); // ← ANTES de :id
-router.get("/flights/:id", getFlightById); // ← ID al final
-router.get("/flights", getFlights); // ← Lista general al final
+router.get("/flights/featured", getFeaturedFlights); 
+router.get("/flights/all", verifyToken, checkAdminOrAirline, getAllFlights); 
+router.get("/flights/:id", getFlightById); 
+router.get("/flights", getFlights); 
 
 router.post(
   "/flights",

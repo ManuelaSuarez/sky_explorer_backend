@@ -11,22 +11,16 @@ export const Booking = sequelize.define(
       primaryKey: true,
       autoIncrement: true,
     },
-    userId: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      references: {
-        model: User,
-        key: "id",
-      },
-    },
-    flightId: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      references: {
-        model: Flight,
-        key: "id",
-      },
-    },
+  userId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    onDelete: "CASCADE",
+  },
+  flightId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    onDelete: "RESTRICT",
+  },
     passengers: {
       type: DataTypes.JSON, // Almacena los datos de todos los pasajeros
       allowNull: false,
@@ -56,8 +50,24 @@ export const Booking = sequelize.define(
 );
 
 // Definir asociaciones
-Booking.belongsTo(User, { foreignKey: "userId", as: "user" });
-Booking.belongsTo(Flight, { foreignKey: "flightId", as: "flight" });
+Booking.belongsTo(User, { 
+  foreignKey: "userId", 
+  as: "user",
+  onDelete: "CASCADE"  
+});
 
-User.hasMany(Booking, { foreignKey: "userId", as: "bookings" });
-Flight.hasMany(Booking, { foreignKey: "flightId", as: "bookings" });
+Booking.belongsTo(Flight, { 
+  foreignKey: "flightId", 
+  as: "flight" 
+});
+
+User.hasMany(Booking, { 
+  foreignKey: "userId", 
+  as: "bookings",
+  onDelete: "CASCADE"  
+});
+
+Flight.hasMany(Booking, { 
+  foreignKey: "flightId", 
+  as: "bookings" 
+});

@@ -1,5 +1,6 @@
 import { Favorite } from "../models/Favorite.js";
 import { Flight } from "../models/Flight.js";
+import { Op } from "sequelize";
 
 // Función para calcular duración entre dos horas
 const calculateDuration = (departureTime, arrivalTime) => {
@@ -10,7 +11,6 @@ const calculateDuration = (departureTime, arrivalTime) => {
     const depMinutes = depHour * 60 + depMin;
     let arrMinutes = arrHour * 60 + arrMin;
     
-    // Si la hora de llegada es menor, asumimos que es del día siguiente
     if (arrMinutes < depMinutes) {
       arrMinutes += 24 * 60;
     }
@@ -80,19 +80,62 @@ export const getMyFavorites = async (req, res) => {
   try {
     const userId = req.user.id;
 
+    console.log("🔍 Consultando favoritos del usuario:", userId);
+
+    // Actualizar estado de vuelos pasados
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    
+    const updated = await Flight.update(
+      { status: "Inactivo" },
+      { 
+        where: { 
+          status: "Activo",
+          date: { [Op.lt]: today }
+        } 
+      }
+    );
+
+    console.log(` ${updated[0]} vuelos actualizados a Inactivo`);
+
+    //  Eliminar favoritos de vuelos inactivos
+    const inactiveFlights = await Flight.findAll({
+      where: { status: "Inactivo" },
+      attributes: ["id"],
+      raw: true
+    });
+
+    const inactiveFlightIds = inactiveFlights.map(f => f.id);
+
+    if (inactiveFlightIds.length > 0) {
+      const deletedFavorites = await Favorite.destroy({
+        where: {
+          userId,
+          flightId: { [Op.in]: inactiveFlightIds }
+        }
+      });
+
+      console.log(` ${deletedFavorites} favorito(s) inactivo(s) eliminado(s)`);
+    }
+
+    // Consultar favoritos restantes
     const favorites = await Favorite.findAll({
       where: { userId },
       include: [
         {
           model: Flight,
           as: "flight",
+          where: { status: "Activo" },
           attributes: { exclude: ["createdAt", "updatedAt"] },
+          required: true
         },
       ],
       order: [["createdAt", "DESC"]],
     });
 
-    // Preparamos los vuelos con duración calculada
+    console.log(`Favoritos activos encontrados: ${favorites.length}`);
+
+    // Preparar vuelos con duración calculada
     const flights = favorites.map(f => {
       const flight = f.flight.toJSON();
       const duration = calculateDuration(flight.departureTime, flight.arrivalTime);
@@ -100,7 +143,7 @@ export const getMyFavorites = async (req, res) => {
       return {
         ...flight,
         duration,
-        returnDuration: duration, // Para vuelos de regreso usamos la misma duración
+        returnDuration: duration,
       };
     });
 

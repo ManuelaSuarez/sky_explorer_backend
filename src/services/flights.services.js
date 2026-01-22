@@ -1,4 +1,5 @@
 import { Flight } from "../models/Flight.js";
+import { Booking } from "../models/Booking.js";
 import { Op } from "sequelize";
 
 // Función para calcular duración entre dos horas
@@ -235,7 +236,7 @@ export const createFlight = async (req, res) => {
     const flightData = flight.toJSON();
     const duration = calculateDuration(flightData.departureTime, flightData.arrivalTime);
 
-    console.log("✅ Vuelo creado exitosamente:", flight.id);
+    console.log("Vuelo creado exitosamente:", flight.id);
 
     if (!airline || !origin || !destination || !date || !departureTime || !arrivalTime) {
       return res.status(400).json({ message: "Todos los campos son obligatorios." });
@@ -269,73 +270,79 @@ export const createFlight = async (req, res) => {
 export const updateFlight = async (req, res) => {
   try {
     const { id } = req.params;
-    const {
-      airline, origin, destination, date,
-      departureTime, arrivalTime, capacity, basePrice, isFeatured
-    } = req.body;
 
     const flight = await Flight.findByPk(id);
     if (!flight) {
       return res.status(404).json({ message: "Vuelo no encontrado" });
     }
 
-    if (req.user?.role === "airline" && req.user.name !== flight.airline) {
-      return res.status(403).json({ message: "No tienes permiso para editar este vuelo." });
+    // Verificar si el vuelo tiene reservas
+ const bookingsCount = await Booking.count({
+  where: {
+    flightId: id,
+    status: "Activo", // o "Confirmado" según tu modelo
+  },
+});
+
+    if (bookingsCount > 0) {
+      return res.status(400).json({
+        message:
+          "No se puede modificar este vuelo porque ya tiene reservas asociadas.",
+      });
     }
 
-        // Validar campos requeridos
+    const {
+      airline,
+      origin,
+      destination,
+      date,
+      departureTime,
+      arrivalTime,
+      capacity,
+      basePrice,
+      isFeatured,
+    } = req.body;
+
+    // Validaciones básicas
     if (!airline || !origin || !destination || !date || !departureTime || !arrivalTime) {
       return res.status(400).json({ message: "Todos los campos son obligatorios." });
     }
 
-    // Validar capacidad y precio
-    if (capacity <= 0) {
-      return res.status(400).json({ message: "La capacidad del vuelo debe ser mayor a 0." });
+    if (capacity <= 0 || basePrice <= 0) {
+      return res.status(400).json({
+        message: "Capacidad y precio deben ser mayores a 0.",
+      });
     }
 
-    if (basePrice <= 0) {
-      return res.status(400).json({ message: "El precio base debe ser mayor a 0." });
-    }
-
-
-    // Actualizar imagen solo si se envió una nueva
     const updateData = {
-      airline, 
-      origin, 
-      destination, 
+      airline,
+      origin,
+      destination,
       date,
-      departureTime, 
-      arrivalTime, 
-      capacity: Number(capacity), 
+      departureTime,
+      arrivalTime,
+      capacity: Number(capacity),
       basePrice: Number(basePrice),
       isFeatured: isFeatured === "true" || isFeatured === true,
     };
 
-    // Si hay nueva imagen, actualizarla
+    // Imagen opcional
     if (req.file) {
       updateData.imageUrl = `/uploads/flights/${req.file.filename}`;
     }
 
     await flight.update(updateData);
 
-    const flightData = flight.toJSON();
-    const duration = calculateDuration(flightData.departureTime, flightData.arrivalTime);
-
-    console.log("✅ Vuelo actualizado:", id);
-
-    res.json({
-      ...flightData,
-      duration,
-      returnDuration: duration,
-    });
+    res.json(flight);
   } catch (error) {
-    console.error("❌ Error al actualizar vuelo:", error.message);
-    return res.status(500).json({
+    console.error("Error al actualizar vuelo:", error);
+    res.status(500).json({
       message: "Error al actualizar el vuelo",
       error: error.message,
     });
   }
 };
+
 
 // Eliminar vuelo
 export const deleteFlight = async (req, res) => {
@@ -352,10 +359,10 @@ export const deleteFlight = async (req, res) => {
     }
 
     await flight.destroy();
-    console.log("✅ Vuelo eliminado:", id);
+    console.log("Vuelo eliminado:", id);
     res.json({ message: "Vuelo eliminado correctamente" });
   } catch (error) {
-    console.error("❌ Error al eliminar vuelo:", error.message);
+    console.error("Error al eliminar vuelo:", error.message);
     return res.status(500).json({
       message: "Error al eliminar el vuelo",
       error: error.message,
@@ -378,7 +385,7 @@ export const toggleFlightStatus = async (req, res) => {
     const flightData = flight.toJSON();
     const duration = calculateDuration(flightData.departureTime, flightData.arrivalTime);
 
-    console.log("✅ Estado cambiado:", id, newStatus);
+    console.log("Estado cambiado:", id, newStatus);
 
     res.json({
       message: `Estado del vuelo cambiado a ${newStatus}`,
@@ -389,7 +396,7 @@ export const toggleFlightStatus = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("❌ Error al cambiar estado del vuelo:", error.message);
+    console.error(" Error al cambiar estado del vuelo:", error.message);
     return res.status(500).json({
       message: "Error al cambiar el estado del vuelo",
       error: error.message,

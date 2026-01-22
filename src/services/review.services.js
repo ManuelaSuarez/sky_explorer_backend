@@ -20,7 +20,7 @@ const existingReview = await Review.findOne({
 });
 
 if (existingReview) {
-  return res.status(400).json({
+  return res.status(409).json({
     message: "Ya has reseñado esta aerolínea",
   });
 }
@@ -81,29 +81,6 @@ export const getAllReviews = async (req, res) => {
   }
 }
 
-// Obtener reseñas por vuelo
-export const getReviewsByFlight = async (req, res) => {
-  try {
-    const { flightId } = req.params
-
-    const reviews = await Review.findAll({
-      where: { flightId },
-      include: [
-        {
-          model: User,
-          as: "user",
-          attributes: ["id", "name", "profilePicture"],
-        },
-      ],
-      order: [["createdAt", "DESC"]],
-    })
-
-    res.json(reviews)
-  } catch (error) {
-    console.error("Error al obtener reseñas por vuelo:", error)
-    res.status(500).json({ message: "Error interno del servidor" })
-  }
-}
 
 // Obtener reseñas por aerolínea
 export const getReviewsByAirline = async (req, res) => {

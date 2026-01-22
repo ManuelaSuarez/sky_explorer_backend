@@ -50,8 +50,17 @@ export const Review = sequelize.define(
 )
 
 // Definir relaciones
-Review.belongsTo(User, { foreignKey: "userId", as: "user" })
-Review.belongsTo(Flight, { foreignKey: "flightId", as: "flight" })
+Review.belongsTo(User, {
+  foreignKey: "userId",
+  as: "user",
+  onDelete: "CASCADE",
+});
+
+Review.belongsTo(Flight, {
+  foreignKey: "flightId",
+  as: "flight",
+  onDelete: "CASCADE",
+});
 
 // Relaciones inversas
 User.hasMany(Review, { foreignKey: "userId", as: "reviews" })
