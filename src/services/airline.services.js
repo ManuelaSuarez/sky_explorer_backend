@@ -146,42 +146,101 @@ export const updateAirline = async (req, res) => {
   }
 };
 
+
 // Eliminar una aerolínea
 export const deleteAirline = async (req, res) => {
   const { id } = req.params;
+  
   try {
     const airline = await Airline.findByPk(id);
-    if (!airline) return res.status(404).json({ message: "Aerolínea no encontrada" });
-
-    // Buscamos todos los vuelos de esta aerolínea
-    const flights = await Flight.findAll({ where: { airline: airline.name } });
-
-   for (const flight of flights) {
-  const activePeople = await Booking.count({
-    where: { 
-      flightId: flight.id, 
-      status: "Activo"
+    if (!airline) {
+      return res.status(404).json({ message: "Aerolínea no encontrada" });
     }
-  });
 
-  if (activePeople > 0) {
-    return res.status(400).json({ 
-      message: `La aerolínea no se puede borrar: el vuelo con destino a ${flight.destination} tiene pasajeros activos.` 
+    console.log(`Verificando aerolínea: ${airline.name}`);
+
+    // Buscar usuario asociado
+    const userAirline = await User.findOne({
+      where: { email: airline.email, role: "airline" }
     });
-  }
 
-  // Limpiamos SOLO lo que depende del vuelo
-  await Favorite.destroy({ where: { flightId: flight.id } });
-  await Booking.destroy({ where: { flightId: flight.id } });
-  await flight.destroy();
-}
+    if (!userAirline) {
+      return res.status(404).json({ 
+        message: "Usuario de aerolínea no encontrado" 
+      });
+    }
 
-    await User.destroy({ where: { email: airline.email } });
+    // Buscar TODOS los vuelos
+    const flights = await Flight.findAll({ 
+      where: { 
+        [Op.or]: [
+          { airline: airline.name },
+          { createdBy: userAirline.id }
+        ]
+      } 
+    });
+
+    console.log(`${flights.length} vuelo(s) encontrado(s)`);
+
+    // Verificar reservas activas en vuelos futuros
+    const now = new Date();
+    
+    for (const flight of flights) {
+      const flightDateTime = new Date(`${flight.date}T${flight.departureTime}`);
+      const isFuture = flightDateTime > now;
+
+      if (isFuture) {
+        const activeBookings = await Booking.count({
+          where: { 
+            flightId: flight.id, 
+            status: "Activo" 
+          }
+        });
+
+        if (activeBookings > 0) {
+          return res.status(400).json({ 
+            message: "No se puede eliminar una aerolínea con reservas activas en vuelos futuros" 
+          });
+        }
+      }
+    }
+
+    // ========== ELIMINAR TODO ==========
+    console.log(`Sin reservas activas, eliminando...`);
+
+    const flightIds = flights.map(f => f.id);
+
+    if (flightIds.length > 0) {
+      await Review.destroy({ where: { flightId: flightIds } });
+      await Favorite.destroy({ where: { flightId: flightIds } });
+      await Booking.destroy({ where: { flightId: flightIds } });
+      await Flight.destroy({ where: { id: flightIds } });
+      
+      console.log(`${flightIds.length} vuelo(s) eliminado(s)`);
+    }
+
+    // Eliminar reseñas por nombre de aerolínea
+    const deletedReviews = await Review.destroy({ 
+      where: { airline: airline.name } 
+    });
+    
+    console.log(`🗑️  ${deletedReviews} reseña(s) eliminada(s)`);
+
+    // Eliminar usuario y aerolínea
+    await User.destroy({ where: { id: userAirline.id } });
     await airline.destroy();
 
-    return res.status(200).json({ message: "Aerolínea eliminada correctamente" });
+    console.log(`Aerolínea ${airline.name} eliminada`);
+    
+    return res.status(200).json({ 
+      message: "Aerolínea eliminada correctamente" 
+    });
+
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Error al eliminar aerolínea" });
+    console.error("Error al eliminar aerolínea:", error);
+    return res.status(500).json({ 
+      message: "Error al eliminar la aerolínea", 
+      error: error.message 
+    });
   }
 };

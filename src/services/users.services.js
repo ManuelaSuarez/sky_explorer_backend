@@ -9,7 +9,9 @@ import { Op } from "sequelize";
 import fs from "fs/promises";
 import path from "path";
 
+// ==========================================
 // FUNCIONES ADMIN
+// ==========================================
 
 // Listar todos los usuarios
 export const getUsers = async (req, res) => {
@@ -21,7 +23,7 @@ export const getUsers = async (req, res) => {
     res.json(users);
   } catch (error) {
     console.error("Error al obtener usuarios:", error);
-    res.status(500).json({ message: "Error al obtener usuarios" });
+    res.status(500).json({ message: "No se pudieron cargar los usuarios." });
   }
 };
 
@@ -33,13 +35,13 @@ export const getUserById = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(404).json({ message: "Usuario no encontrado" });
+      return res.status(404).json({ message: "Usuario no encontrado." });
     }
 
     res.json(user);
   } catch (error) {
     console.error("Error al obtener usuario:", error);
-    res.status(500).json({ message: "Error al obtener usuario" });
+    res.status(500).json({ message: "Error al obtener la información del usuario." });
   }
 };
 
@@ -49,18 +51,16 @@ export const createUser = async (req, res) => {
     const { name, email, password, confirmPassword } = req.body;
 
     if (!name || !email || !password) {
-      return res
-        .status(400)
-        .json({ message: "Nombre, email y contraseña son requeridos" });
+      return res.status(400).json({ message: "Todos los campos son obligatorios." });
     }
 
     if (password !== confirmPassword) {
-      return res.status(400).json({ message: "Las contraseñas no coinciden" });
+      return res.status(400).json({ message: "Las contraseñas no coinciden." });
     }
 
     const userExists = await User.findOne({ where: { email } });
     if (userExists) {
-      return res.status(400).json({ message: "Este email ya está registrado" });
+      return res.status(400).json({ message: "Este correo electrónico ya está registrado." });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -79,18 +79,18 @@ export const createUser = async (req, res) => {
     });
   } catch (error) {
     console.error("Error al crear usuario:", error);
-    res.status(500).json({ message: "Error al crear usuario" });
+    res.status(500).json({ message: "No se pudo crear el usuario." });
   }
 };
 
-// Actualizar usuario de aerolínea
+// Actualizar usuario de aerolínea (Admin)
 export const updateUser = async (req, res) => {
   try {
     const { name, email, password } = req.body;
     const user = await User.findByPk(req.params.id);
 
     if (!user) {
-      return res.status(404).json({ message: "Usuario no encontrado" });
+      return res.status(404).json({ message: "Usuario no encontrado." });
     }
 
     if (email && email !== user.email) {
@@ -98,7 +98,7 @@ export const updateUser = async (req, res) => {
         where: { email, id: { [Op.ne]: req.params.id } },
       });
       if (emailExists) {
-        return res.status(400).json({ message: "Este email ya está en uso" });
+        return res.status(400).json({ message: "El correo electrónico ya está en uso." });
       }
     }
 
@@ -111,7 +111,7 @@ export const updateUser = async (req, res) => {
     await user.save();
 
     res.json({
-      message: "Usuario actualizado",
+      message: "Usuario actualizado correctamente.",
       user: {
         id: user.id,
         name: user.name,
@@ -121,72 +121,88 @@ export const updateUser = async (req, res) => {
     });
   } catch (error) {
     console.error("Error al actualizar usuario:", error);
-    res.status(500).json({ message: "Error al actualizar usuario" });
+    res.status(500).json({ message: "No se pudo actualizar la información." });
   }
 };
 
-// Eliminar usuario de aerolínea (ADMIN)
+// Eliminar o aerolínea (ADMIN)
 export const deleteUser = async (req, res) => {
+  const t = await User.sequelize.transaction();
   try {
-    const user = await User.findByPk(req.params.id);
-    if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
+    const user = await User.findByPk(req.params.id, { transaction: t });
+    if (!user) {
+      await t.rollback();
+      return res.status(404).json({ message: "El usuario no existe." });
+    }
 
-    // 1. SI ES AEROLÍNEA: Evaluación vuelo por vuelo
+    // 1. SI ES AEROLÍNEA: Validar vuelos con pasajeros
     if (user.role === "airline") {
       const flights = await Flight.findAll({
-        where: { [Op.or]: [{ airline: user.name }, { createdBy: user.id }] }
+        where: { [Op.or]: [{ airline: user.name }, { createdBy: user.id }] },
+        transaction: t
       });
 
       for (const flight of flights) {
-        // Contamos reservas que NO estén canceladas ni inactivas
         const activeBookings = await Booking.count({
-          where: { 
-            flightId: flight.id, 
-            status: { [Op.notIn]: ["Cancelado", "Inactivo"] } 
-          }
+          where: { flightId: flight.id, status: "Activo" },
+          transaction: t
         });
 
-        // Si un solo vuelo tiene gente activa, frenamos todo
         if (activeBookings > 0) {
+          await t.rollback();
           return res.status(400).json({ 
-            message: `No se puede eliminar: el vuelo ${flight.origin}-${flight.destination} tiene ${activeBookings} reservas activas.` 
+            message: "No se puede eliminar la aerolínea porque tiene vuelos con reservas activas." 
           });
         }
 
-        // Si el vuelo no tiene reservas activas, borramos sus dependencias
-        await Favorite.destroy({ where: { flightId: flight.id } });
-        await Review.destroy({ where: { flightId: flight.id } });
-        await Booking.destroy({ where: { flightId: flight.id } }); // Borra las inactivas
-        await flight.destroy();
+        // Limpieza de datos del vuelo
+        await Favorite.destroy({ where: { flightId: flight.id }, transaction: t });
+        await Booking.destroy({ where: { flightId: flight.id }, transaction: t });
+        await flight.destroy({ transaction: t });
       }
       
-      await Airline.destroy({ where: { email: user.email } });
+      await Review.destroy({ where: { airline: user.name }, transaction: t });
+      await Airline.destroy({ where: { email: user.email }, transaction: t });
     }
 
     // 2. SI ES USUARIO (PASAJERO)
     if (user.role === "user") {
       const activeBookings = await Booking.count({
-        where: { userId: user.id, status: { [Op.notIn]: ["Cancelado", "Inactivo"] } }
+        where: { userId: user.id, status: "Activo" },
+        transaction: t
       });
 
       if (activeBookings > 0) {
-        return res.status(400).json({ message: "Tienes reservas activas pendientes." });
+        await t.rollback();
+        return res.status(400).json({ 
+          message: "No se puede eliminar el usuario porque tiene reservas de viaje pendientes." 
+        });
       }
     }
 
-    // Limpieza final de relaciones del usuario
-    await Review.destroy({ where: { userId: user.id } });
-    await Favorite.destroy({ where: { userId: user.id } });
-    await Booking.destroy({ where: { userId: user.id } }); 
-    await user.destroy();
+    // 3. LIMPIEZA FINAL
+    await Review.destroy({ where: { userId: user.id }, transaction: t });
+    await Favorite.destroy({ where: { userId: user.id }, transaction: t });
+    await Booking.destroy({ where: { userId: user.id }, transaction: t });
 
-    res.json({ message: "Eliminado con éxito" });
+    if (user.profilePicture) {
+      const imagePath = path.join("uploads", "profile-pictures", user.profilePicture);
+      try { await fs.unlink(imagePath); } catch (err) { console.log("Foto no encontrada."); }
+    }
+
+    await user.destroy({ transaction: t });
+    await t.commit();
+
+    res.json({ message: "Usuario eliminado correctamente." });
   } catch (error) {
-    res.status(500).json({ message: "Error al procesar el borrado" });
+    if (t) await t.rollback();
+    res.status(500).json({ message: "Hubo un error al procesar la eliminación." });
   }
 };
 
-// FUNCIONES USER REGULAR
+// ==========================================
+// FUNCIONES USUARIO REGULAR
+// ==========================================
 
 // Ver mi perfil
 export const getMyProfile = async (req, res) => {
@@ -196,13 +212,12 @@ export const getMyProfile = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(404).json({ message: "Usuario no encontrado" });
+      return res.status(404).json({ message: "Usuario no encontrado." });
     }
 
     res.json(user);
   } catch (error) {
-    console.error("Error al obtener perfil:", error);
-    res.status(500).json({ message: "Error al obtener perfil" });
+    res.status(500).json({ message: "Error al obtener el perfil." });
   }
 };
 
@@ -214,54 +229,30 @@ export const updateUserProfile = async (req, res) => {
     const file = req.file;
 
     if (!user) {
-      if (file) {
-        await fs.unlink(file.path);
-      }
-      return res.status(404).json({ message: "Usuario no encontrado" });
+      if (file) await fs.unlink(file.path);
+      return res.status(404).json({ message: "Usuario no encontrado." });
     }
 
-    // Guardar nombre anterior si es aerolínea
     const oldName = user.name;
 
+    // Manejo de imagen de perfil
     if (file) {
       if (user.profilePicture) {
-        const oldImagePath = path.join("uploads", "profile-pictures", user.profilePicture);
-        try {
-          await fs.access(oldImagePath);
-          await fs.unlink(oldImagePath);
-        } catch (error) {
-          console.log("No se pudo eliminar el archivo anterior:", error.message);
-        }
+        const oldPath = path.join("uploads", "profile-pictures", user.profilePicture);
+        try { await fs.unlink(oldPath); } catch (e) {}
       }
       user.profilePicture = file.filename;
     } else if (req.body.profilePicture === "delete" && user.profilePicture) {
-      const imagePath = path.join("uploads", "profile-pictures", user.profilePicture);
-      try {
-        await fs.access(imagePath);
-        await fs.unlink(imagePath);
-      } catch (error) {
-        console.log("No se pudo eliminar el archivo:", error.message);
-      }
+      const oldPath = path.join("uploads", "profile-pictures", user.profilePicture);
+      try { await fs.unlink(oldPath); } catch (e) {}
       user.profilePicture = null;
     }
 
+    // Manejo de contraseña
     if (newPassword) {
-      if (!currentPassword) {
-        return res
-          .status(400)
-          .json({ message: "Ingresa tu contraseña actual" });
-      }
-
-      const isValidPassword = await bcrypt.compare(
-        currentPassword,
-        user.password
-      );
-      if (!isValidPassword) {
-        return res
-          .status(400)
-          .json({ message: "Contraseña actual incorrecta" });
-      }
-
+      if (!currentPassword) return res.status(400).json({ message: "Debes ingresar tu contraseña actual." });
+      const isValid = await bcrypt.compare(currentPassword, user.password);
+      if (!isValid) return res.status(400).json({ message: "La contraseña actual es incorrecta." });
       user.password = await bcrypt.hash(newPassword, 10);
     }
 
@@ -270,171 +261,80 @@ export const updateUserProfile = async (req, res) => {
 
     await user.save();
 
-    // Si es aerolínea y cambió el nombre, actualizar vuelos y reseñas
+    // Sincronización si es aerolínea
     if (user.role === "airline" && name && oldName !== name) {
-      // Actualizar vuelos
-      const updatedFlights = await Flight.update(
-        { airline: name },
-        { 
-          where: { 
-            [Op.or]: [
-              { airline: oldName },
-              { createdBy: user.id }
-            ]
-          } 
-        }
-      );
-
-      console.log(`${updatedFlights[0]} vuelo(s) actualizados de "${oldName}" a "${name}"`);
-
-      // Actualizar reseñas
-      const updatedReviews = await Review.update(
-        { airline: name },
-        { where: { airline: oldName } }
-      );
-
-      console.log(`${updatedReviews[0]} reseña(s) actualizadas de "${oldName}" a "${name}"`);
-
-      // También actualizar en la tabla Airline si existe
-      const airlineRecord = await Airline.findOne({
-        where: { email: user.email }
-      });
-
+      await Flight.update({ airline: name }, { where: { [Op.or]: [{ airline: oldName }, { createdBy: user.id }] } });
+      await Review.update({ airline: name }, { where: { airline: oldName } });
+      const airlineRecord = await Airline.findOne({ where: { email: user.email } });
       if (airlineRecord) {
         airlineRecord.name = name;
         await airlineRecord.save();
       }
     }
 
-    res.json({
-      message: "Perfil actualizado",
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        profilePicture: user.profilePicture,
-      },
-    });
+    res.json({ message: "Perfil actualizado correctamente.", user });
   } catch (error) {
-    console.error("Error al actualizar perfil:", error);
-    res.status(500).json({ message: "Error al actualizar perfil" });
+    res.status(500).json({ message: "No se pudo actualizar el perfil." });
   }
 };
 
-// Eliminar mi cuenta 
-// Eliminar mi cuenta 
+// Eliminar mi propia cuenta
 export const deleteUserProfileWithBookings = async (req, res) => {
-  // Iniciamos una transacción para asegurar que la limpieza sea atómica
   const t = await User.sequelize.transaction();
-
   try {
     const user = await User.findByPk(req.user.id, { transaction: t });
-    if (!user) {
-      await t.rollback();
-      return res.status(404).json({ message: "Usuario no encontrado" });
-    }
-
     const now = new Date();
 
-    /* =====================================================
-       1. USUARIO NORMAL (PASAJERO)
-    ===================================================== */
     if (user.role === "user") {
-      const allBookings = await Booking.findAll({
-        where: { userId: user.id },
-        include: [{ model: Flight, as: "flight", required: true }],
+      const activeBookings = await Booking.count({
+        where: { userId: user.id, status: "Activo" },
         transaction: t
       });
 
-      const futureBookings = allBookings.filter(booking => {
-        const flightDateTime = new Date(`${booking.flight.date}T${booking.flight.departureTime}`);
-        return flightDateTime > now;
-      });
-
-      if (futureBookings.length > 0) {
+      if (activeBookings > 0) {
         await t.rollback();
-        return res.status(400).json({
-          message: `No puedes eliminar tu cuenta: tienes ${futureBookings.length} reserva(s) en vuelos futuros.`
-        });
+        return res.status(400).json({ message: "No puedes eliminar tu cuenta mientras tengas viajes pendientes." });
       }
     }
 
-    /* =====================================================
-       2. AEROLÍNEA (DUEÑA DE VUELOS)
-    ===================================================== */
     if (user.role === "airline") {
       const flights = await Flight.findAll({
-        where: {
-          [Op.or]: [{ airline: user.name }, { createdBy: user.id }]
-        },
+        where: { [Op.or]: [{ airline: user.name }, { createdBy: user.id }] },
         transaction: t
       });
 
       for (const flight of flights) {
-        const flightDateTime = new Date(`${flight.date}T${flight.departureTime}`);
-        
-        // Bloqueo si hay pasajeros en vuelos que aún no ocurren
-        if (flightDateTime > now) {
-          const bookingsCount = await Booking.count({ 
-            where: { flightId: flight.id }, 
-            transaction: t 
-          });
+        const bookingsCount = await Booking.count({ 
+          where: { flightId: flight.id, status: "Activo" }, 
+          transaction: t 
+        });
 
-          if (bookingsCount > 0) {
-            await t.rollback();
-            return res.status(400).json({
-              message: `No se puede eliminar: el vuelo a ${flight.destination} tiene reservas activas.`
-            });
-          }
+        if (bookingsCount > 0) {
+          await t.rollback();
+          return res.status(400).json({ message: "No puedes eliminar la aerolínea porque existen vuelos con pasajeros registrados." });
         }
-
-        // LIMPIEZA DEL VUELO (Sin tocar reviews aquí, ya que no tienen flightId)
         await Favorite.destroy({ where: { flightId: flight.id }, transaction: t });
         await Booking.destroy({ where: { flightId: flight.id }, transaction: t });
         await flight.destroy({ transaction: t });
       }
-
-      // Borrar las reseñas que otros usuarios le hicieron A ESTA aerolínea
-      await Review.destroy({ where: { airline: user.name }, transaction: t });
-      
-      // Borrar registro de la tabla Airline
       await Airline.destroy({ where: { email: user.email }, transaction: t });
     }
 
-    /* =====================================================
-       3. LIMPIEZA FINAL DE LA CUENTA (Común para ambos)
-    ===================================================== */
-    // Borrar lo que EL USUARIO generó (sus reviews dadas, sus favoritos, sus bookings)
     await Review.destroy({ where: { userId: user.id }, transaction: t });
     await Favorite.destroy({ where: { userId: user.id }, transaction: t });
     await Booking.destroy({ where: { userId: user.id }, transaction: t });
 
-    // Borrar foto de perfil física
     if (user.profilePicture) {
       const imagePath = path.join("uploads", "profile-pictures", user.profilePicture);
-      try {
-        await fs.access(imagePath);
-        await fs.unlink(imagePath);
-      } catch (err) {
-        console.log("Archivo no encontrado, continuando...");
-      }
+      try { await fs.unlink(imagePath); } catch (err) {}
     }
 
-    // Finalmente borrar al usuario
     await user.destroy({ transaction: t });
-
-    // Confirmar todos los cambios
     await t.commit();
-
-    res.json({ message: "Cuenta eliminada correctamente." });
+    res.json({ message: "Tu cuenta ha sido eliminada exitosamente." });
 
   } catch (error) {
     if (t) await t.rollback();
-    console.error("Error al eliminar cuenta:", error);
-    res.status(500).json({
-      message: "Error al eliminar la cuenta",
-      error: error.message
-    });
+    res.status(500).json({ message: "No se pudo completar la eliminación de la cuenta." });
   }
 };
