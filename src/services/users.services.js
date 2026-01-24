@@ -129,123 +129,60 @@ export const updateUser = async (req, res) => {
 export const deleteUser = async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id);
+    if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
 
-    if (!user) {
-      return res.status(404).json({ message: "Usuario no encontrado" });
-    }
-
-    if (req.user.id === parseInt(req.params.id)) {
-      return res
-        .status(403)
-        .json({ message: "No puedes eliminar tu propia cuenta" });
-    }
-
-    // VALIDACIÓN PARA AEROLÍNEAS
+    // 1. SI ES AEROLÍNEA: Evaluación vuelo por vuelo
     if (user.role === "airline") {
-      console.log(`🔍 Admin intentando eliminar aerolínea: ${user.name}`);
-
-      // Buscar vuelos ACTIVOS de esta aerolínea
-      const activeFlights = await Flight.findAll({
-        where: { 
-          [Op.or]: [
-            { airline: user.name },
-            { createdBy: req.params.id }
-          ],
-          status: "Activo" // SOLO VUELOS ACTIVOS
-        },
-        attributes: ["id"],
-        raw: true
+      const flights = await Flight.findAll({
+        where: { [Op.or]: [{ airline: user.name }, { createdBy: user.id }] }
       });
 
-      const activeFlightIds = activeFlights.map(f => f.id);
-      console.log(`Vuelos ACTIVOS de ${user.name}:`, activeFlightIds);
-
-      if (activeFlightIds.length > 0) {
-        // Verificar reservas en vuelos ACTIVOS
+      for (const flight of flights) {
+        // Contamos reservas que NO estén canceladas ni inactivas
         const activeBookings = await Booking.count({
-          where: { flightId: activeFlightIds }
+          where: { 
+            flightId: flight.id, 
+            status: { [Op.notIn]: ["Cancelado", "Inactivo"] } 
+          }
         });
 
+        // Si un solo vuelo tiene gente activa, frenamos todo
         if (activeBookings > 0) {
-          return res.status(400).json({
-            message: `No se puede eliminar: la aerolínea tiene ${activeBookings} reserva(s) activa(s) en vuelos futuros.`,
+          return res.status(400).json({ 
+            message: `No se puede eliminar: el vuelo ${flight.origin}-${flight.destination} tiene ${activeBookings} reservas activas.` 
           });
         }
 
-        // Verificar favoritos en vuelos ACTIVOS
-        const activeFavorites = await Favorite.count({
-          where: { flightId: activeFlightIds }
-        });
-
-        if (activeFavorites > 0) {
-          return res.status(400).json({
-            message: `No se puede eliminar: tiene ${activeFavorites} vuelo(s) activo(s) marcado(s) como favorito(s).`,
-          });
-        }
-
-        // Verificar reseñas en vuelos ACTIVOS
-        const activeReviews = await Review.count({
-          where: { flightId: activeFlightIds }
-        });
-
-        if (activeReviews > 0) {
-          return res.status(400).json({
-            message: `No se puede eliminar: tiene ${activeReviews} reseña(s) en vuelos activos.`,
-          });
-        }
+        // Si el vuelo no tiene reservas activas, borramos sus dependencias
+        await Favorite.destroy({ where: { flightId: flight.id } });
+        await Review.destroy({ where: { flightId: flight.id } });
+        await Booking.destroy({ where: { flightId: flight.id } }); // Borra las inactivas
+        await flight.destroy();
       }
-
-      // Buscar TODOS los vuelos (activos e inactivos) para eliminar
-      const allFlights = await Flight.findAll({
-        where: { 
-          [Op.or]: [
-            { airline: user.name },
-            { createdBy: req.params.id }
-          ]
-        },
-        attributes: ["id"],
-        raw: true
-      });
-
-      const allFlightIds = allFlights.map(f => f.id);
-      console.log(` Eliminando ${allFlightIds.length} vuelo(s) totales de ${user.name}...`);
-
-      if (allFlightIds.length > 0) {
-        await Favorite.destroy({ where: { flightId: allFlightIds } });
-        await Review.destroy({ where: { flightId: allFlightIds } });
-        await Booking.destroy({ where: { flightId: allFlightIds } });
-        await Flight.destroy({ where: { id: allFlightIds } });
-      }
-    } else {
-      // Si es usuario normal, verificar sus reservas ACTIVAS
-      const activeUserBookings = await Booking.count({
-        where: { userId: req.params.id },
-        include: [{
-          model: Flight,
-          as: "flight",
-          where: { status: "Activo" },
-          required: true
-        }]
-      });
       
-      if (activeUserBookings > 0) {
-        return res.status(400).json({
-          message: `No se puede eliminar: el usuario tiene ${activeUserBookings} reserva(s) activa(s) en vuelos futuros.`,
-        });
+      await Airline.destroy({ where: { email: user.email } });
+    }
+
+    // 2. SI ES USUARIO (PASAJERO)
+    if (user.role === "user") {
+      const activeBookings = await Booking.count({
+        where: { userId: user.id, status: { [Op.notIn]: ["Cancelado", "Inactivo"] } }
+      });
+
+      if (activeBookings > 0) {
+        return res.status(400).json({ message: "Tienes reservas activas pendientes." });
       }
     }
 
-    // Eliminar relaciones del usuario
-    await Review.destroy({ where: { userId: req.params.id } });
-    await Favorite.destroy({ where: { userId: req.params.id } });
-    await Booking.destroy({ where: { userId: req.params.id } });
-
+    // Limpieza final de relaciones del usuario
+    await Review.destroy({ where: { userId: user.id } });
+    await Favorite.destroy({ where: { userId: user.id } });
+    await Booking.destroy({ where: { userId: user.id } }); 
     await user.destroy();
-    console.log(`Usuario ${user.name} eliminado por admin`);
-    res.json({ message: "Usuario eliminado" });
+
+    res.json({ message: "Eliminado con éxito" });
   } catch (error) {
-    console.error("Error al eliminar usuario:", error);
-    res.status(500).json({ message: "Error al eliminar usuario" });
+    res.status(500).json({ message: "Error al procesar el borrado" });
   }
 };
 
@@ -356,7 +293,7 @@ export const updateUserProfile = async (req, res) => {
         { where: { airline: oldName } }
       );
 
-      console.log(`✅ ${updatedReviews[0]} reseña(s) actualizadas de "${oldName}" a "${name}"`);
+      console.log(`${updatedReviews[0]} reseña(s) actualizadas de "${oldName}" a "${name}"`);
 
       // También actualizar en la tabla Airline si existe
       const airlineRecord = await Airline.findOne({
@@ -385,130 +322,119 @@ export const updateUserProfile = async (req, res) => {
   }
 };
 
-// Eliminar mi cuenta (con validaciones profesionales)
+// Eliminar mi cuenta 
+// Eliminar mi cuenta 
 export const deleteUserProfileWithBookings = async (req, res) => {
-  try {
-    const user = await User.findByPk(req.user.id);
+  // Iniciamos una transacción para asegurar que la limpieza sea atómica
+  const t = await User.sequelize.transaction();
 
+  try {
+    const user = await User.findByPk(req.user.id, { transaction: t });
     if (!user) {
+      await t.rollback();
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
-    // VALIDACIÓN PARA AEROLÍNEAS
-    if (user.role === "airline") {
-      console.log(`🔍 Verificando aerolínea: ${user.name}`);
+    const now = new Date();
 
-      // Buscar vuelos ACTIVOS
-      const activeFlights = await Flight.findAll({
-        where: { 
-          [Op.or]: [
-            { airline: user.name },
-            { createdBy: req.user.id }
-          ],
-          status: "Activo" //  SOLO ACTIVOS
-        },
-        attributes: ["id"],
-        raw: true
+    /* =====================================================
+       1. USUARIO NORMAL (PASAJERO)
+    ===================================================== */
+    if (user.role === "user") {
+      const allBookings = await Booking.findAll({
+        where: { userId: user.id },
+        include: [{ model: Flight, as: "flight", required: true }],
+        transaction: t
       });
 
-      const activeFlightIds = activeFlights.map(f => f.id);
-      console.log(` Vuelos ACTIVOS:`, activeFlightIds);
-
-      if (activeFlightIds.length > 0) {
-        const activeBookings = await Booking.count({
-          where: { flightId: activeFlightIds }
-        });
-
-        if (activeBookings > 0) {
-          return res.status(400).json({ 
-            message: `No se puede eliminar la cuenta. Tiene ${activeBookings} reserva(s) activa(s) en vuelos futuros.` 
-          });
-        }
-
-        const activeFavorites = await Favorite.count({
-          where: { flightId: activeFlightIds }
-        });
-
-        if (activeFavorites > 0) {
-          return res.status(400).json({ 
-            message: `No se puede eliminar la cuenta. Tiene ${activeFavorites} vuelo(s) activo(s) marcado(s) como favorito(s).` 
-          });
-        }
-
-        const activeReviews = await Review.count({
-          where: { flightId: activeFlightIds }
-        });
-
-        if (activeReviews > 0) {
-          return res.status(400).json({ 
-            message: `No se puede eliminar la cuenta. Tiene ${activeReviews} reseña(s) en vuelos activos.` 
-          });
-        }
-      }
-
-      // Eliminar TODOS los vuelos
-      const allFlights = await Flight.findAll({
-        where: { 
-          [Op.or]: [
-            { airline: user.name },
-            { createdBy: req.user.id }
-          ]
-        },
-        attributes: ["id"],
-        raw: true
+      const futureBookings = allBookings.filter(booking => {
+        const flightDateTime = new Date(`${booking.flight.date}T${booking.flight.departureTime}`);
+        return flightDateTime > now;
       });
 
-      const allFlightIds = allFlights.map(f => f.id);
-
-      if (allFlightIds.length > 0) {
-        await Favorite.destroy({ where: { flightId: allFlightIds } });
-        await Review.destroy({ where: { flightId: allFlightIds } });
-        await Booking.destroy({ where: { flightId: allFlightIds } });
-        await Flight.destroy({ where: { id: allFlightIds } });
-      }
-    } else {
-      //  VALIDACIÓN PARA USUARIOS NORMALES
-      // Verificar si tiene reservas en vuelos ACTIVOS
-      const activeUserBookings = await Booking.count({
-        where: { userId: req.user.id },
-        include: [{
-          model: Flight,
-          as: "flight",
-          where: { status: "Activo" },
-          required: true
-        }]
-      });
-
-      if (activeUserBookings > 0) {
+      if (futureBookings.length > 0) {
+        await t.rollback();
         return res.status(400).json({
-          message: `No puedes eliminar tu cuenta. Tienes ${activeUserBookings} reserva(s) activa(s) en vuelos futuros. Por favor, espera a que los vuelos se completen o contacta con soporte.`
+          message: `No puedes eliminar tu cuenta: tienes ${futureBookings.length} reserva(s) en vuelos futuros.`
         });
       }
     }
 
-    // Eliminar foto de perfil
+    /* =====================================================
+       2. AEROLÍNEA (DUEÑA DE VUELOS)
+    ===================================================== */
+    if (user.role === "airline") {
+      const flights = await Flight.findAll({
+        where: {
+          [Op.or]: [{ airline: user.name }, { createdBy: user.id }]
+        },
+        transaction: t
+      });
+
+      for (const flight of flights) {
+        const flightDateTime = new Date(`${flight.date}T${flight.departureTime}`);
+        
+        // Bloqueo si hay pasajeros en vuelos que aún no ocurren
+        if (flightDateTime > now) {
+          const bookingsCount = await Booking.count({ 
+            where: { flightId: flight.id }, 
+            transaction: t 
+          });
+
+          if (bookingsCount > 0) {
+            await t.rollback();
+            return res.status(400).json({
+              message: `No se puede eliminar: el vuelo a ${flight.destination} tiene reservas activas.`
+            });
+          }
+        }
+
+        // LIMPIEZA DEL VUELO (Sin tocar reviews aquí, ya que no tienen flightId)
+        await Favorite.destroy({ where: { flightId: flight.id }, transaction: t });
+        await Booking.destroy({ where: { flightId: flight.id }, transaction: t });
+        await flight.destroy({ transaction: t });
+      }
+
+      // Borrar las reseñas que otros usuarios le hicieron A ESTA aerolínea
+      await Review.destroy({ where: { airline: user.name }, transaction: t });
+      
+      // Borrar registro de la tabla Airline
+      await Airline.destroy({ where: { email: user.email }, transaction: t });
+    }
+
+    /* =====================================================
+       3. LIMPIEZA FINAL DE LA CUENTA (Común para ambos)
+    ===================================================== */
+    // Borrar lo que EL USUARIO generó (sus reviews dadas, sus favoritos, sus bookings)
+    await Review.destroy({ where: { userId: user.id }, transaction: t });
+    await Favorite.destroy({ where: { userId: user.id }, transaction: t });
+    await Booking.destroy({ where: { userId: user.id }, transaction: t });
+
+    // Borrar foto de perfil física
     if (user.profilePicture) {
       const imagePath = path.join("uploads", "profile-pictures", user.profilePicture);
       try {
         await fs.access(imagePath);
         await fs.unlink(imagePath);
-      } catch (error) {
-        console.log("No se pudo eliminar la foto de perfil:", error.message);
+      } catch (err) {
+        console.log("Archivo no encontrado, continuando...");
       }
     }
 
-    // Eliminar relaciones del usuario
-    await Review.destroy({ where: { userId: req.user.id } });
-    await Favorite.destroy({ where: { userId: req.user.id } });
-    await Booking.destroy({ where: { userId: req.user.id } });
+    // Finalmente borrar al usuario
+    await user.destroy({ transaction: t });
 
-    // Eliminar usuario
-    await user.destroy();
+    // Confirmar todos los cambios
+    await t.commit();
 
-    console.log(`Usuario ${user.name} eliminado correctamente`);
-    res.json({ message: "Cuenta eliminada correctamente" });
+    res.json({ message: "Cuenta eliminada correctamente." });
+
   } catch (error) {
+    if (t) await t.rollback();
     console.error("Error al eliminar cuenta:", error);
-    res.status(500).json({ message: "Error al eliminar cuenta" });
+    res.status(500).json({
+      message: "Error al eliminar la cuenta",
+      error: error.message
+    });
   }
 };
