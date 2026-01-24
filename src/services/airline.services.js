@@ -166,7 +166,7 @@ export const deleteAirline = async (req, res) => {
 
   if (activePeople > 0) {
     return res.status(400).json({ 
-      message: `La aerolínea no se puede borrar: el vuelo ${flight.id} tiene pasajeros activos.` 
+      message: `La aerolínea no se puede borrar: el vuelo con destino a ${flight.destination} tiene pasajeros activos.` 
     });
   }
 

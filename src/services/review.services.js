@@ -10,7 +10,7 @@ export const createReview = async (req, res) => {
     const { airline, rating, comment } = req.body
     const userId = req.user.id
 
-    console.log('📝 Creando reseña:', { userId, airline, rating })
+    console.log('Creando reseña:', { userId, airline, rating })
 
     // ========== VALIDACIONES ==========
     
@@ -70,7 +70,7 @@ export const createReview = async (req, res) => {
       comment: comment.trim(),
     })
 
-    console.log('✅ Reseña creada:', review.id)
+    console.log('Reseña creada:', review.id)
 
     // Obtener la reseña con información del usuario
     const reviewWithUser = await Review.findByPk(review.id, {
@@ -88,7 +88,7 @@ export const createReview = async (req, res) => {
       review: reviewWithUser,
     })
   } catch (error) {
-    console.error("❌ Error al crear reseña:", error)
+    console.error("Error al crear reseña:", error)
     res.status(500).json({ 
       message: "Error interno del servidor",
       error: error.message 
@@ -112,10 +112,10 @@ export const getAllReviews = async (req, res) => {
       order: [["createdAt", "DESC"]],
     })
 
-    console.log(`📋 ${reviews.length} reseñas encontradas`)
+    console.log(`${reviews.length} reseñas encontradas`)
     res.json(reviews)
   } catch (error) {
-    console.error("❌ Error al obtener reseñas:", error)
+    console.error("Error al obtener reseñas:", error)
     res.status(500).json({ 
       message: "Error interno del servidor",
       error: error.message 
@@ -186,7 +186,7 @@ export const getAirlineAverageRating = async (req, res) => {
       : 0
     const totalReviews = result[0]?.totalReviews || 0
 
-    console.log(`⭐ ${airline}: ${averageRating} (${totalReviews} reseñas)`)
+    console.log(`${airline}: ${averageRating} (${totalReviews} reseñas)`)
 
     res.json({
       airline,
@@ -194,7 +194,7 @@ export const getAirlineAverageRating = async (req, res) => {
       totalReviews: Number.parseInt(totalReviews),
     })
   } catch (error) {
-    console.error("❌ Error al calcular promedio:", error)
+    console.error("Error al calcular promedio:", error)
     res.status(500).json({ 
       message: "Error interno del servidor",
       error: error.message 
@@ -251,7 +251,7 @@ export const updateReview = async (req, res) => {
       comment: comment.trim() 
     })
 
-    console.log('✅ Reseña actualizada:', id)
+    console.log('Reseña actualizada:', id)
 
     // Obtener la reseña actualizada con información del usuario
     const updatedReview = await Review.findByPk(id, {
@@ -269,7 +269,7 @@ export const updateReview = async (req, res) => {
       review: updatedReview,
     })
   } catch (error) {
-    console.error("❌ Error al actualizar reseña:", error)
+    console.error("Error al actualizar reseña:", error)
     res.status(500).json({ 
       message: "Error interno del servidor",
       error: error.message 
@@ -306,11 +306,11 @@ export const deleteReview = async (req, res) => {
     // Eliminar la reseña
     await review.destroy()
 
-    console.log(`✅ Reseña de ${airlineName} eliminada`)
+    console.log(`Reseña de ${airlineName} eliminada`)
 
     res.json({ message: "Reseña eliminada exitosamente" })
   } catch (error) {
-    console.error("❌ Error al eliminar reseña:", error)
+    console.error("Error al eliminar reseña:", error)
     res.status(500).json({ 
       message: "Error interno del servidor",
       error: error.message 
