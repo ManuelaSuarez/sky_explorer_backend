@@ -135,6 +135,9 @@ export const deleteUser = async (req, res) => {
       return res.status(404).json({ message: "El usuario no existe." });
     }
 
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+
     // 1. SI ES AEROLÍNEA: Validar vuelos con pasajeros
     if (user.role === "airline") {
       const flights = await Flight.findAll({
@@ -143,8 +146,19 @@ export const deleteUser = async (req, res) => {
       });
 
       for (const flight of flights) {
+        // Validar si hay reservas activas con fecha futura
         const activeBookings = await Booking.count({
-          where: { flightId: flight.id, status: "Activo" },
+          where: { 
+            flightId: flight.id,
+            status: "Activo"
+          },
+          include: [{
+            model: Flight,
+            as: 'flight',
+            where: {
+              date: { [Op.gte]: today }
+            }
+          }],
           transaction: t
         });
 
@@ -167,12 +181,20 @@ export const deleteUser = async (req, res) => {
 
     // 2. SI ES USUARIO (PASAJERO)
     if (user.role === "user") {
-      const activeBookings = await Booking.count({
-        where: { userId: user.id, status: "Activo" },
+      // Validar por fecha del vuelo, no por status
+      const bookingsWithFutureFlights = await Booking.findAll({
+        where: { userId: user.id },
+        include: [{
+          model: Flight,
+          as: 'flight',
+          where: {
+            date: { [Op.gte]: today }
+          }
+        }],
         transaction: t
       });
 
-      if (activeBookings > 0) {
+      if (bookingsWithFutureFlights.length > 0) {
         await t.rollback();
         return res.status(400).json({ 
           message: "No se puede eliminar el usuario porque tiene reservas de viaje pendientes." 
@@ -196,6 +218,7 @@ export const deleteUser = async (req, res) => {
     res.json({ message: "Usuario eliminado correctamente." });
   } catch (error) {
     if (t) await t.rollback();
+    console.error("Error al eliminar usuario:", error);
     res.status(500).json({ message: "Hubo un error al procesar la eliminación." });
   }
 };
@@ -274,6 +297,7 @@ export const updateUserProfile = async (req, res) => {
 
     res.json({ message: "Perfil actualizado correctamente.", user });
   } catch (error) {
+    console.error("Error al actualizar perfil:", error);
     res.status(500).json({ message: "No se pudo actualizar el perfil." });
   }
 };
@@ -282,18 +306,36 @@ export const updateUserProfile = async (req, res) => {
 export const deleteUserProfileWithBookings = async (req, res) => {
   const t = await User.sequelize.transaction();
   try {
+    console.log("Iniciando eliminación de cuenta con reservas...");
+    
     const user = await User.findByPk(req.user.id, { transaction: t });
+    console.log("Usuario encontrado:", user.id, "Rol:", user.role);
+    
     const now = new Date();
+    const today = now.toISOString().split('T')[0];
 
     if (user.role === "user") {
-      const activeBookings = await Booking.count({
-        where: { userId: user.id, status: "Activo" },
+      // Validar por fecha del vuelo, no por status
+      const bookingsWithFutureFlights = await Booking.findAll({
+        where: { userId: user.id },
+        include: [{
+          model: Flight,
+          as: 'flight',
+          where: {
+            date: { [Op.gte]: today }
+          }
+        }],
         transaction: t
       });
 
-      if (activeBookings > 0) {
+      console.log("Reservas con vuelos futuros:", bookingsWithFutureFlights.length);
+
+      if (bookingsWithFutureFlights.length > 0) {
+        console.log("Usuario con reservas futuras, cancelando eliminación");
         await t.rollback();
-        return res.status(400).json({ message: "No puedes eliminar tu cuenta mientras tengas viajes pendientes." });
+        return res.status(400).json({ 
+          message: "No puedes eliminar tu cuenta mientras tengas viajes pendientes." 
+        });
       }
     }
 
@@ -305,13 +347,22 @@ export const deleteUserProfileWithBookings = async (req, res) => {
 
       for (const flight of flights) {
         const bookingsCount = await Booking.count({ 
-          where: { flightId: flight.id, status: "Activo" }, 
+          where: { flightId: flight.id },
+          include: [{
+            model: Flight,
+            as: 'flight',
+            where: {
+              date: { [Op.gte]: today }
+            }
+          }],
           transaction: t 
         });
 
         if (bookingsCount > 0) {
           await t.rollback();
-          return res.status(400).json({ message: "No puedes eliminar la aerolínea porque existen vuelos con pasajeros registrados." });
+          return res.status(400).json({ 
+            message: "No puedes eliminar la aerolínea porque existen vuelos con pasajeros registrados." 
+          });
         }
         await Favorite.destroy({ where: { flightId: flight.id }, transaction: t });
         await Booking.destroy({ where: { flightId: flight.id }, transaction: t });
@@ -320,6 +371,7 @@ export const deleteUserProfileWithBookings = async (req, res) => {
       await Airline.destroy({ where: { email: user.email }, transaction: t });
     }
 
+    console.log("Limpiando datos del usuario...");
     await Review.destroy({ where: { userId: user.id }, transaction: t });
     await Favorite.destroy({ where: { userId: user.id }, transaction: t });
     await Booking.destroy({ where: { userId: user.id }, transaction: t });
@@ -331,10 +383,12 @@ export const deleteUserProfileWithBookings = async (req, res) => {
 
     await user.destroy({ transaction: t });
     await t.commit();
+    console.log("Cuenta eliminada exitosamente");
     res.json({ message: "Tu cuenta ha sido eliminada exitosamente." });
 
   } catch (error) {
     if (t) await t.rollback();
+    console.error("Error al eliminar cuenta:", error);
     res.status(500).json({ message: "No se pudo completar la eliminación de la cuenta." });
   }
 };
