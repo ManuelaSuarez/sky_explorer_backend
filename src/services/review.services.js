@@ -148,10 +148,10 @@ export const getReviewsByAirline = async (req, res) => {
       order: [["createdAt", "DESC"]],
     })
 
-    console.log(`📋 ${reviews.length} reseñas de ${airline}`)
+    console.log(`${reviews.length} reseñas de ${airline}`)
     res.json(reviews)
   } catch (error) {
-    console.error("❌ Error al obtener reseñas por aerolínea:", error)
+    console.error("Error al obtener reseñas por aerolínea:", error)
     res.status(500).json({ 
       message: "Error interno del servidor",
       error: error.message 
@@ -211,7 +211,7 @@ export const updateReview = async (req, res) => {
     const { rating, comment } = req.body
     const userId = req.user.id
 
-    console.log('📝 Actualizando reseña:', { id, userId, rating })
+    console.log('Actualizando reseña:', { id, userId, rating })
 
     // Validaciones
     if (!rating) {
@@ -285,7 +285,7 @@ export const deleteReview = async (req, res) => {
     const { id } = req.params
     const userId = req.user.id
 
-    console.log('🗑️  Eliminando reseña:', { id, userId })
+    console.log('Eliminando reseña:', { id, userId })
 
     // Buscar la reseña
     const review = await Review.findByPk(id)

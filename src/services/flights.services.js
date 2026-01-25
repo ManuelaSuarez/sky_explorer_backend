@@ -1,7 +1,6 @@
 import { Flight } from "../models/Flight.js";
 import { Booking } from "../models/Booking.js";
-import { Favorite } from "../models/Favorite.js";  
-import { Review } from "../models/Review.js";      
+import { Favorite } from "../models/Favorite.js";      
 import { Op } from "sequelize";
 
 // Función para calcular duración entre dos horas

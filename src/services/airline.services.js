@@ -211,7 +211,6 @@ export const deleteAirline = async (req, res) => {
     const flightIds = flights.map(f => f.id);
 
     if (flightIds.length > 0) {
-      await Review.destroy({ where: { flightId: flightIds } });
       await Favorite.destroy({ where: { flightId: flightIds } });
       await Booking.destroy({ where: { flightId: flightIds } });
       await Flight.destroy({ where: { id: flightIds } });
@@ -224,7 +223,7 @@ export const deleteAirline = async (req, res) => {
       where: { airline: airline.name } 
     });
     
-    console.log(`🗑️  ${deletedReviews} reseña(s) eliminada(s)`);
+    console.log(`${deletedReviews} reseña(s) eliminada(s)`);
 
     // Eliminar usuario y aerolínea
     await User.destroy({ where: { id: userAirline.id } });
