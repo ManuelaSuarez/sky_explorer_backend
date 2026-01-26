@@ -1,7 +1,6 @@
 import { Router } from "express"
 import {
   createReview,
-  getReviewsByFlight,
   getReviewsByAirline,
   updateReview,
   deleteReview,
@@ -15,7 +14,6 @@ const router = Router()
 
 // Rutas públicas para consultar reseñas
 router.get("/reviews", getAllReviews) // Obtener todas las reseñas
-router.get("/reviews/flight/:flightId", getReviewsByFlight) // Obtener reseñas por vuelo
 router.get("/reviews/airline/:airline", getReviewsByAirline) // Obtener reseñas por aerolínea
 router.get("/reviews/airline/:airline/average", getAirlineAverageRating) // Obtener calificación promedio de aerolínea
 

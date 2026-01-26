@@ -52,14 +52,15 @@ export const Flight = sequelize.define(
       allowNull: false,
       defaultValue: DataTypes.NOW,
     },
-    createdBy: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      references: {
-        model: User,
-        key: "id",
-      },
+  createdBy: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: User,
+      key: "id",
     },
+    onDelete: "SET NULL",
+  },
     imageUrl: {
       type: DataTypes.STRING,
       allowNull: true,
@@ -74,4 +75,8 @@ export const Flight = sequelize.define(
   }
 );
 
-Flight.belongsTo(User, { foreignKey: "createdBy", as: "creator" });
+Flight.belongsTo(User, {
+  foreignKey: "createdBy",
+  as: "creator",
+  onDelete: "SET NULL",
+});

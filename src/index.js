@@ -15,7 +15,7 @@ import "./models/Booking.js"
 import "./models/Review.js"
 import "./models/Favorite.js"; 
 import cors from "cors"
-import path from "path" // Importa path
+import path from "path" 
 
 const app = express()
 

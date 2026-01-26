@@ -1,38 +1,76 @@
 import { Review } from "../models/Review.js"
 import { User } from "../models/User.js"
-import { Flight } from "../models/Flight.js"
+import { Airline } from "../models/Airline.js"
 
-// Crear nueva reseña
+// ============================================================
+// CREAR NUEVA RESEÑA
+// ============================================================
 export const createReview = async (req, res) => {
   try {
-    const { flightId, airline, rating, comment } = req.body
+    const { airline, rating, comment } = req.body
     const userId = req.user.id
 
-    // Verificar que el vuelo existe
-    const flight = await Flight.findByPk(flightId)
-    if (!flight) {
-      return res.status(404).json({ message: "Vuelo no encontrado" })
+    console.log('Creando reseña:', { userId, airline, rating })
+
+    // ========== VALIDACIONES ==========
+    
+    // 1. Validar campos obligatorios
+    if (!airline) {
+      return res.status(400).json({ 
+        message: "La aerolínea es obligatoria" 
+      })
     }
 
-    // Verificar que el usuario no haya reseñado ya esta aerolinea
-const existingReview = await Review.findOne({
-  where: { userId, airline },
-});
+    if (!rating) {
+      return res.status(400).json({ 
+        message: "La calificación es obligatoria" 
+      })
+    }
 
-if (existingReview) {
-  return res.status(400).json({
-    message: "Ya has reseñado esta aerolínea",
-  });
-}
+    if (!comment || !comment.trim()) {
+      return res.status(400).json({ 
+        message: "El comentario es obligatorio" 
+      })
+    }
 
-    // Crear la reseña
+    // 2. Validar rating
+    if (rating < 1 || rating > 5) {
+      return res.status(400).json({ 
+        message: "La calificación debe estar entre 1 y 5" 
+      })
+    }
+
+    // 3. Verificar que la aerolínea exista
+    const airlineExists = await Airline.findOne({
+      where: { name: airline }
+    })
+
+    if (!airlineExists) {
+      return res.status(404).json({ 
+        message: "Aerolínea no encontrada" 
+      })
+    }
+
+    // 4. Verificar que el usuario no haya reseñado ya esta aerolínea
+    const existingReview = await Review.findOne({
+      where: { userId, airline }
+    })
+
+    if (existingReview) {
+      return res.status(409).json({
+        message: "Ya has reseñado esta aerolínea"
+      })
+    }
+
+    // ========== CREAR RESEÑA ==========
     const review = await Review.create({
       userId,
-      flightId,
       airline,
       rating,
-      comment,
+      comment: comment.trim(),
     })
+
+    console.log('Reseña creada:', review.id)
 
     // Obtener la reseña con información del usuario
     const reviewWithUser = await Review.findByPk(review.id, {
@@ -51,11 +89,16 @@ if (existingReview) {
     })
   } catch (error) {
     console.error("Error al crear reseña:", error)
-    res.status(500).json({ message: "Error interno del servidor" })
+    res.status(500).json({ 
+      message: "Error interno del servidor",
+      error: error.message 
+    })
   }
 }
 
-// Obtener todas las reseñas
+// ============================================================
+// OBTENER TODAS LAS RESEÑAS
+// ============================================================
 export const getAllReviews = async (req, res) => {
   try {
     const reviews = await Review.findAll({
@@ -65,50 +108,33 @@ export const getAllReviews = async (req, res) => {
           as: "user",
           attributes: ["id", "name", "profilePicture"],
         },
-        {
-          model: Flight,
-          as: "flight",
-          attributes: ["id", "airline", "origin", "destination"],
-        },
       ],
       order: [["createdAt", "DESC"]],
     })
 
+    console.log(`${reviews.length} reseñas encontradas`)
     res.json(reviews)
   } catch (error) {
     console.error("Error al obtener reseñas:", error)
-    res.status(500).json({ message: "Error interno del servidor" })
-  }
-}
-
-// Obtener reseñas por vuelo
-export const getReviewsByFlight = async (req, res) => {
-  try {
-    const { flightId } = req.params
-
-    const reviews = await Review.findAll({
-      where: { flightId },
-      include: [
-        {
-          model: User,
-          as: "user",
-          attributes: ["id", "name", "profilePicture"],
-        },
-      ],
-      order: [["createdAt", "DESC"]],
+    res.status(500).json({ 
+      message: "Error interno del servidor",
+      error: error.message 
     })
-
-    res.json(reviews)
-  } catch (error) {
-    console.error("Error al obtener reseñas por vuelo:", error)
-    res.status(500).json({ message: "Error interno del servidor" })
   }
 }
 
-// Obtener reseñas por aerolínea
+// ============================================================
+// OBTENER RESEÑAS POR AEROLÍNEA
+// ============================================================
 export const getReviewsByAirline = async (req, res) => {
   try {
     const { airline } = req.params
+
+    if (!airline) {
+      return res.status(400).json({ 
+        message: "Debe proporcionar el nombre de la aerolínea" 
+      })
+    }
 
     const reviews = await Review.findAll({
       where: { airline },
@@ -118,26 +144,33 @@ export const getReviewsByAirline = async (req, res) => {
           as: "user",
           attributes: ["id", "name", "profilePicture"],
         },
-        {
-          model: Flight,
-          as: "flight",
-          attributes: ["id", "origin", "destination", "date"],
-        },
       ],
       order: [["createdAt", "DESC"]],
     })
 
+    console.log(`${reviews.length} reseñas de ${airline}`)
     res.json(reviews)
   } catch (error) {
     console.error("Error al obtener reseñas por aerolínea:", error)
-    res.status(500).json({ message: "Error interno del servidor" })
+    res.status(500).json({ 
+      message: "Error interno del servidor",
+      error: error.message 
+    })
   }
 }
 
-// Obtener calificación promedio de aerolínea
+// ============================================================
+// OBTENER CALIFICACIÓN PROMEDIO DE AEROLÍNEA
+// ============================================================
 export const getAirlineAverageRating = async (req, res) => {
   try {
     const { airline } = req.params
+
+    if (!airline) {
+      return res.status(400).json({ 
+        message: "Debe proporcionar el nombre de la aerolínea" 
+      })
+    }
 
     const result = await Review.findAll({
       where: { airline },
@@ -148,8 +181,12 @@ export const getAirlineAverageRating = async (req, res) => {
       raw: true,
     })
 
-    const averageRating = result[0]?.averageRating ? Number.parseFloat(result[0].averageRating).toFixed(1) : 0
+    const averageRating = result[0]?.averageRating 
+      ? Number.parseFloat(result[0].averageRating).toFixed(1) 
+      : 0
     const totalReviews = result[0]?.totalReviews || 0
+
+    console.log(`${airline}: ${averageRating} (${totalReviews} reseñas)`)
 
     res.json({
       airline,
@@ -158,16 +195,42 @@ export const getAirlineAverageRating = async (req, res) => {
     })
   } catch (error) {
     console.error("Error al calcular promedio:", error)
-    res.status(500).json({ message: "Error interno del servidor" })
+    res.status(500).json({ 
+      message: "Error interno del servidor",
+      error: error.message 
+    })
   }
 }
 
-// Actualizar reseña
+// ============================================================
+// ACTUALIZAR RESEÑA
+// ============================================================
 export const updateReview = async (req, res) => {
   try {
     const { id } = req.params
     const { rating, comment } = req.body
     const userId = req.user.id
+
+    console.log('Actualizando reseña:', { id, userId, rating })
+
+    // Validaciones
+    if (!rating) {
+      return res.status(400).json({ 
+        message: "La calificación es obligatoria" 
+      })
+    }
+
+    if (!comment || !comment.trim()) {
+      return res.status(400).json({ 
+        message: "El comentario es obligatorio" 
+      })
+    }
+
+    if (rating < 1 || rating > 5) {
+      return res.status(400).json({ 
+        message: "La calificación debe estar entre 1 y 5" 
+      })
+    }
 
     // Buscar la reseña
     const review = await Review.findByPk(id)
@@ -175,7 +238,7 @@ export const updateReview = async (req, res) => {
       return res.status(404).json({ message: "Reseña no encontrada" })
     }
 
-    // Verificar que el usuario sea el propietario de la reseña
+    // Verificar que el usuario sea el propietario
     if (review.userId !== userId) {
       return res.status(403).json({
         message: "No tienes permiso para editar esta reseña",
@@ -183,7 +246,12 @@ export const updateReview = async (req, res) => {
     }
 
     // Actualizar la reseña
-    await review.update({ rating, comment })
+    await review.update({ 
+      rating, 
+      comment: comment.trim() 
+    })
+
+    console.log('Reseña actualizada:', id)
 
     // Obtener la reseña actualizada con información del usuario
     const updatedReview = await Review.findByPk(id, {
@@ -202,15 +270,22 @@ export const updateReview = async (req, res) => {
     })
   } catch (error) {
     console.error("Error al actualizar reseña:", error)
-    res.status(500).json({ message: "Error interno del servidor" })
+    res.status(500).json({ 
+      message: "Error interno del servidor",
+      error: error.message 
+    })
   }
 }
 
-// Eliminar reseña
+// ============================================================
+// ELIMINAR RESEÑA
+// ============================================================
 export const deleteReview = async (req, res) => {
   try {
     const { id } = req.params
     const userId = req.user.id
+
+    console.log('Eliminando reseña:', { id, userId })
 
     // Buscar la reseña
     const review = await Review.findByPk(id)
@@ -218,19 +293,27 @@ export const deleteReview = async (req, res) => {
       return res.status(404).json({ message: "Reseña no encontrada" })
     }
 
-    // Verificar que el usuario sea el propietario de la reseña
+    // Verificar que el usuario sea el propietario
     if (review.userId !== userId) {
       return res.status(403).json({
         message: "No tienes permiso para eliminar esta reseña",
       })
     }
 
+    // Guardar info para el log
+    const airlineName = review.airline
+
     // Eliminar la reseña
     await review.destroy()
+
+    console.log(`Reseña de ${airlineName} eliminada`)
 
     res.json({ message: "Reseña eliminada exitosamente" })
   } catch (error) {
     console.error("Error al eliminar reseña:", error)
-    res.status(500).json({ message: "Error interno del servidor" })
+    res.status(500).json({ 
+      message: "Error interno del servidor",
+      error: error.message 
+    })
   }
 }

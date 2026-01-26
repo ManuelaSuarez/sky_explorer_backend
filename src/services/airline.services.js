@@ -1,12 +1,17 @@
 import { Airline } from "../models/Airline.js";
 import { User } from "../models/User.js";
+import { Flight } from "../models/Flight.js";
+import { Booking } from "../models/Booking.js";
+import { Favorite } from "../models/Favorite.js";
+import { Review } from "../models/Review.js";
+import { Op } from "sequelize";
 import bcrypt from "bcrypt";
 
 // Obtener todas las aerolíneas
 export const getAirlines = async (req, res) => {
   try {
     const airlines = await Airline.findAll({
-      attributes: { exclude: ["password"] }, // Excluir la contraseña al obtener aerolíneas
+      attributes: { exclude: ["password"] },
     });
     res.json(airlines);
   } catch (error) {
@@ -22,7 +27,6 @@ export const createAirline = async (req, res) => {
   const { name, code, cuit, email, password } = req.body;
 
   try {
-    // Validar si la aerolínea ya existe por email en la tabla Airline
     const existingAirlineInAirlineTable = await Airline.findOne({
       where: { email },
     });
@@ -33,7 +37,6 @@ export const createAirline = async (req, res) => {
         .json({ message: "Ya existe una aerolínea con este email." });
     }
 
-    // Validar si el email ya está en uso en la tabla User
     const existingUser = await User.findOne({ where: { email } });
     if (existingUser) {
       return res.status(400).json({
@@ -41,7 +44,6 @@ export const createAirline = async (req, res) => {
       });
     }
 
-    // Validar si el nombre de la aerolínea ya está en uso
     const existingUserWithName = await User.findOne({ where: { name } });
     if (existingUserWithName) {
       return res.status(400).json({
@@ -49,18 +51,16 @@ export const createAirline = async (req, res) => {
       });
     }
 
-    // Encriptar la contraseña
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    // Crear el registro de la aerolínea en la tabla Airline
     const newAirline = await Airline.create({
       name,
       code,
       cuit,
       email,
       password: hashedPassword,
-      role: "airline", // Asignar el rol por defecto en la tabla Airline
+      role: "airline",
     });
 
     await User.create({
@@ -91,21 +91,50 @@ export const updateAirline = async (req, res) => {
       return res.status(404).json({ message: "Aerolínea no encontrada." });
     }
 
-    // Actualiza la aerolínea en la tabla Airline
+    // Guardar el nombre anterior
+    const oldName = airline.name;
+
+    // Actualizar datos de la aerolínea
     airline.name = name;
     airline.code = code;
     airline.cuit = cuit;
     airline.email = email;
     await airline.save();
 
-    // Actualiza el usuario asociado en la tabla User si el email o nombre cambiaron
+    // Actualizar el usuario asociado
     const userToUpdate = await User.findOne({
       where: { email: airline.email },
     });
+    
     if (userToUpdate) {
       userToUpdate.name = name;
       userToUpdate.email = email;
       await userToUpdate.save();
+
+      // Actualizar nombre en TODOS los vuelos si cambió
+      if (oldName !== name) {
+        const updatedFlights = await Flight.update(
+          { airline: name },
+          { 
+            where: { 
+              [Op.or]: [
+                { airline: oldName },
+                { createdBy: userToUpdate.id }
+              ]
+            } 
+          }
+        );
+
+        console.log(` ${updatedFlights[0]} vuelo(s) actualizados de "${oldName}" a "${name}"`);
+
+        // Actualizar nombre en TODAS las reseñas
+        const updatedReviews = await Review.update(
+          { airline: name },
+          { where: { airline: oldName } }
+        );
+
+        console.log(`${updatedReviews[0]} reseña(s) actualizadas de "${oldName}" a "${name}"`);
+      }
     }
 
     res.json(airline);
@@ -117,35 +146,100 @@ export const updateAirline = async (req, res) => {
   }
 };
 
+
 // Eliminar una aerolínea
 export const deleteAirline = async (req, res) => {
   const { id } = req.params;
-
+  
   try {
-    const airlineToDelete = await Airline.findByPk(id);
-
-    if (!airlineToDelete) {
-      return res.status(404).json({ message: "Aerolínea no encontrada." });
+    const airline = await Airline.findByPk(id);
+    if (!airline) {
+      return res.status(404).json({ message: "Aerolínea no encontrada" });
     }
 
-    await User.destroy({
-      where: { email: airlineToDelete.email },
+    console.log(`Verificando aerolínea: ${airline.name}`);
+
+    // Buscar usuario asociado
+    const userAirline = await User.findOne({
+      where: { email: airline.email, role: "airline" }
     });
 
-    const deletedRows = await Airline.destroy({
-      where: { id },
-    });
-
-    if (deletedRows === 0) {
-      return res.status(404).json({
-        message: "Aerolínea no encontrada (después de intentar eliminar).",
+    if (!userAirline) {
+      return res.status(404).json({ 
+        message: "Usuario de aerolínea no encontrado" 
       });
     }
-    res.status(204).send();
+
+    // Buscar TODOS los vuelos
+    const flights = await Flight.findAll({ 
+      where: { 
+        [Op.or]: [
+          { airline: airline.name },
+          { createdBy: userAirline.id }
+        ]
+      } 
+    });
+
+    console.log(`${flights.length} vuelo(s) encontrado(s)`);
+
+    // Verificar reservas activas en vuelos futuros
+    const now = new Date();
+    
+    for (const flight of flights) {
+      const flightDateTime = new Date(`${flight.date}T${flight.departureTime}`);
+      const isFuture = flightDateTime > now;
+
+      if (isFuture) {
+        const activeBookings = await Booking.count({
+          where: { 
+            flightId: flight.id, 
+            status: "Activo" 
+          }
+        });
+
+        if (activeBookings > 0) {
+          return res.status(400).json({ 
+            message: "No se puede eliminar una aerolínea con reservas activas en vuelos futuros" 
+          });
+        }
+      }
+    }
+
+    // ========== ELIMINAR TODO ==========
+    console.log(`Sin reservas activas, eliminando...`);
+
+    const flightIds = flights.map(f => f.id);
+
+    if (flightIds.length > 0) {
+      await Favorite.destroy({ where: { flightId: flightIds } });
+      await Booking.destroy({ where: { flightId: flightIds } });
+      await Flight.destroy({ where: { id: flightIds } });
+      
+      console.log(`${flightIds.length} vuelo(s) eliminado(s)`);
+    }
+
+    // Eliminar reseñas por nombre de aerolínea
+    const deletedReviews = await Review.destroy({ 
+      where: { airline: airline.name } 
+    });
+    
+    console.log(`${deletedReviews} reseña(s) eliminada(s)`);
+
+    // Eliminar usuario y aerolínea
+    await User.destroy({ where: { id: userAirline.id } });
+    await airline.destroy();
+
+    console.log(`Aerolínea ${airline.name} eliminada`);
+    
+    return res.status(200).json({ 
+      message: "Aerolínea eliminada correctamente" 
+    });
+
   } catch (error) {
     console.error("Error al eliminar aerolínea:", error);
-    res
-      .status(500)
-      .json({ message: "Error al eliminar aerolínea", error: error.message });
+    return res.status(500).json({ 
+      message: "Error al eliminar la aerolínea", 
+      error: error.message 
+    });
   }
 };

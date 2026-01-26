@@ -31,7 +31,7 @@ export const User = sequelize.define("user", {
     defaultValue: "user",
     allowNull: false,
   },
-  // NUEVO CAMPO: URL de la foto de perfil
+  // URL de la foto de perfil
   profilePicture: {
     type: DataTypes.STRING,
     allowNull: true,
